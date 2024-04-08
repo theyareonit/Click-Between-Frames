@@ -1,0 +1,29 @@
+{
+	"geode": "2.0.0-beta.23",
+	"gd": "2.204",
+	"version": "v1.0.0",
+	"id": "syzzi.click_between_frames",
+	"name": "Click Between Frames",
+	"developer": "syzzi",
+	"description": "Allows inputs to register between frames. Like TPS Bypass or Draw Divide, but with less lag and fewer physics bugs.",
+	"dependencies": [
+		{
+			"id": "geode.custom-keybinds",
+			"version": ">=v1.5.2",
+			"imortance": "required"
+		}
+	],
+	"incompatibilities": [
+		{
+			"id": "nytelyte.wave_trail_drag_fix",
+			"importance": "conflicting",
+			"version": "*"
+		}
+	],
+	"tags": [
+		"Performance",
+		"Gameplay",
+		"Enhancement"
+	],
+	"repository": "https://github.com/theyareonit/Click-Between-Frames"
+}
