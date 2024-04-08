@@ -176,9 +176,16 @@ bool isDead = false;
 bool inDual = false;
 bool twoPlayer = false;
 bool lock2p = false;
+
+bool skipUpdate = true;
 void updateGameState() {
-	PlayLayer *playLayer;
-	if (!(playLayer = PlayLayer::get())) return log::debug("how");
+	PlayLayer *playLayer = PlayLayer::get();
+	// returns null in editor
+	if ( !playLayer ) { 
+		skipUpdate = true;
+		return;
+	}
+	
 	isDead = playLayer->m_player1->m_isDead;
 	inDual = playLayer->m_gameState.m_isDualMode;
 	twoPlayer = playLayer->m_level->m_twoPlayerMode;
@@ -193,7 +200,6 @@ int inputQueueSize;
 int stepCount;
 bool newFrame = true;
 bool firstFrame = true;
-bool skipUpdate = true;
 bool enableInput = false;
 void updateInputQueueAndTime() {
 	if (stepCount > 0 && !GameManager::sharedState()->getEditorLayer()) {
@@ -274,6 +280,8 @@ void updateDeltaFactorAndInput() {
 	deltaFactor = front.deltaFactor;
 	if (nextInput.time.QuadPart != 0) {
 		PlayLayer *playLayer = PlayLayer::get();
+		if( !playLayer )
+			return;
 		int player;
 
 		if (!inDual && !twoPlayer) player = Player1;
