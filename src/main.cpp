@@ -61,15 +61,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		UINT dwSize;
 		GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
 
-		LPBYTE lpb = new BYTE[dwSize];
+		auto lpb = std::unique_ptr<BYTE[]>(new BYTE[dwSize]);
 		if (!lpb) {
 			return 0;
 		}
-		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
+		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb.get(), &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
 			log::debug("GetRawInputData does not return correct size");
 		}
 
-		RAWINPUT* raw = (RAWINPUT*)lpb;
+		RAWINPUT* raw = (RAWINPUT*)lpb.get();
 		switch (raw->header.dwType) {
 		case RIM_TYPEKEYBOARD: {
 			USHORT vkey = raw->data.keyboard.VKey;
