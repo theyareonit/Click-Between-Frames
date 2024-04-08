@@ -1,3 +1,7 @@
+# Installation
+
+Install [Geode](https://geode-sdk.org/install/) for Windows, then install this mod from the Geode index.
+
 # What does it do
 
 This mod allows your inputs to register in between visual frames, which drastically increases input precision on low framerates like 60FPS.
