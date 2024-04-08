@@ -20,7 +20,7 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 # Known issues
 
 - Follow triggers will stutter for 1 frame after clicking
-- Touch triggers don't activate in between frames
+- Touch triggers don't have subframe precision
 - Lock 2p controls is not yet supported
 - Swap 2p controls is not yet supported (use rebinds instead)
 - Controller input is not yet supported
