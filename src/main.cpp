@@ -177,8 +177,8 @@ bool inDual = false;
 bool twoPlayer = false;
 bool lock2p = false;
 void updateGameState() {
-	PlayLayer *playLayer;
-	if (!(playLayer = PlayLayer::get())) return log::debug("how");
+	PlayLayer *playLayer = PlayLayer::get();
+	if (!playLayer) return;
 	isDead = playLayer->m_player1->m_isDead;
 	inDual = playLayer->m_gameState.m_isDualMode;
 	twoPlayer = playLayer->m_level->m_twoPlayerMode;
@@ -196,7 +196,11 @@ bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 void updateInputQueueAndTime() {
-	if (stepCount > 0 && !GameManager::sharedState()->getEditorLayer()) {
+	if (GameManager::sharedState()->getEditorLayer()) {
+		skipUpdate = true;
+		return;
+	}
+	if (stepCount > 0) {
 		nextInput = { 0, 0, PlayerButton::Jump, 0, 0 };
 		std::queue<struct step>().swap(stepQueue); // shouldnt do anything but just in case
 		lastFrameTime = currentFrameTime;

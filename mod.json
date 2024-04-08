@@ -17,7 +17,7 @@
 		{
 			"id": "nytelyte.wave_trail_drag_fix",
 			"importance": "conflicting",
-			"version": "*"
+			"version": "<=v1.1.6"
 		}
 	],
 	"tags": [

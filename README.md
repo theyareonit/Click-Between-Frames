@@ -19,6 +19,7 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 
 # Known issues
 
+- This mod does not work with bots (not fixable)
 - Follow triggers will stutter for 1 frame after clicking
 - Touch triggers don't have subframe precision
 - Lock 2p controls is not yet supported
