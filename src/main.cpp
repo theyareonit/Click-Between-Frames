@@ -418,8 +418,8 @@ class $modify(CCScheduler) {
 
 class $modify(PlayerObject) {
 	static void onModify(auto & self) {
-		self.setHookPriority("PlayerObject::pushButton", 50000);
-		self.setHookPriority("PlayerObject::releaseButton", 50000);
+		self.setHookPriority("PlayerObject::pushButton", INT_MIN);
+		self.setHookPriority("PlayerObject::releaseButton", INT_MIN);
 	}
 
 	void pushButton(PlayerButton button) {
