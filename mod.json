@@ -10,7 +10,7 @@
 		{
 			"id": "geode.custom-keybinds",
 			"version": ">=v1.5.2",
-			"imortance": "required"
+			"importance": "required"
 		}
 	],
 	"incompatibilities": [
