@@ -107,10 +107,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			inputType = PlayerButton::Jump;
 
 			EnterCriticalSection(&keybindsLock);
+			bool rc = enableRightClick;
+			LeaveCriticalSection(&keybindsLock);
 			if (flags & RI_MOUSE_BUTTON_1_DOWN) inputState = Press;
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
 				player = Player2;
+				if (!rc) return 0;
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) {
 					inputState = Press;
 					keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", true).post();
@@ -119,12 +122,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 					inputState = Release;
 					keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", false).post();
 				}
-				else shouldEmplace = false;
-				if (!enableRightClick) shouldEmplace = false;
+				else return 0;
 			}
-
-			LeaveCriticalSection(&keybindsLock);
-			if (!shouldEmplace) return 0;
 			break;
 		}
 		default:
