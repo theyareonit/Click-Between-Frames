@@ -1,7 +1,7 @@
 {
 	"geode": "2.0.0-beta.23",
 	"gd": "2.204",
-	"version": "v1.0.4",
+	"version": "v1.0.5",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -25,5 +25,13 @@
 		"Gameplay",
 		"Enhancement"
 	],
+	"settings": {
+		"right-click": {
+			"name": "Right Click P2",
+			"description": "Use right click for player 2 jump",
+			"type": "bool",
+			"default": false
+		}
+	},
 	"repository": "https://github.com/theyareonit/Click-Between-Frames"
 }

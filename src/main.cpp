@@ -49,6 +49,7 @@ std::set<USHORT> heldInputs;
 
 CRITICAL_SECTION inputQueueLock;
 CRITICAL_SECTION keybindsLock;
+bool enableRightClick;
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LARGE_INTEGER time;
 	PlayerButton inputType;
@@ -101,8 +102,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		}
 		case RIM_TYPEMOUSE: {
 			USHORT flags = raw->data.mouse.usButtonFlags;
+			bool shouldEmplace = true;
 			player = Player1;
 			inputType = PlayerButton::Jump;
+
+			EnterCriticalSection(&keybindsLock);
 			if (flags & RI_MOUSE_BUTTON_1_DOWN) inputState = Press;
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
@@ -115,8 +119,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 					inputState = Release;
 					keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", false).post();
 				}
-				else return 0;
+				else shouldEmplace = false;
+				if (!enableRightClick) shouldEmplace = false;
 			}
+
+			LeaveCriticalSection(&keybindsLock);
+			if (!shouldEmplace) return 0;
 			break;
 		}
 		default:
@@ -377,6 +385,7 @@ __declspec(naked) void physicsMidhook() {
 void updateKeybinds() {
 	std::vector<geode::Ref<keybinds::Bind>> v;
 	EnterCriticalSection(&keybindsLock);
+	enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
 	inputBinds->clear();
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
 	for (int i = 0; i < v.size(); i++) inputBinds[p1Jump].emplace(v[i]->getHash());
