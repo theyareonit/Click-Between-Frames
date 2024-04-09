@@ -196,11 +196,11 @@ bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 void updateInputQueueAndTime() {
-	if (GameManager::sharedState()->getEditorLayer()) {
+	if (GameManager::sharedState()->getEditorLayer() || stepCount == 0) {
 		skipUpdate = true;
 		return;
 	}
-	if (stepCount > 0) {
+	else {
 		nextInput = { 0, 0, PlayerButton::Jump, 0, 0 };
 		std::queue<struct step>().swap(stepQueue); // shouldnt do anything but just in case
 		lastFrameTime = currentFrameTime;
@@ -404,7 +404,8 @@ class $modify(CCScheduler) {
 	void update(float dTime) {
 		// clear queue if the player is not in a level or is paused
 		PlayLayer* playLayer = PlayLayer::get();
-		if (!playLayer || (getChildOfType<PauseLayer>(playLayer->getParent(), 0) != nullptr)) {
+		CCNode* par;
+		if (!playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
 			LeaveCriticalSection(&inputQueueLock);
