@@ -10,7 +10,7 @@ It's similar to TPS Bypass or Draw Divide, but with much less lag and far fewer 
 # How to use
 
 To edit keybinds, go to the GD options menu and click the "Keys" button in the top right (Mega Hack rebinds won't work).
-When using mouse, left click is player 1, and right click is player 2.
+To enable right click input, use the mod options menu.
 
 For best input precision, use either MHv8 Physics Bypass or one of the following FPS values: 60, 80, 120, 240.
 Any other FPS values (without Physics Bypass) will provide poor results, due to how 2.2's physics work.
