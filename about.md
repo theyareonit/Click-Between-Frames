@@ -18,7 +18,7 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 - This mod does not work with existing bots
 - Follow triggers will stutter for 1 frame after clicking
 - Touch triggers don't have subframe precision
-- - Moving platforms have strange physics in platformer mode
+- Moving platforms have strange physics in platformer mode
 - Lock 2p controls is not yet supported
 - Swap 2p controls is not yet supported (use rebinds instead)
 - Controller input is not yet supported
