@@ -203,7 +203,9 @@ bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 void updateInputQueueAndTime() {
-	if (GameManager::sharedState()->getEditorLayer() || stepCount == 0) {
+	updateGameState();
+	if (GameManager::sharedState()->getEditorLayer() || stepCount == 0 || isDead) {
+		firstFrame = true;
 		skipUpdate = true;
 		return;
 	}
@@ -222,7 +224,7 @@ void updateInputQueueAndTime() {
 
 		// on the first frame after entering a level, stepDelta is 0. if you do PlayerObject::update(0) at any point, the player will permanently freeze
 		if (!firstFrame) skipUpdate = false;
-		if (firstFrame || isDead) {
+		if (firstFrame) {
 			inputQueueSize = 0;
 			enableInput = true;
 			skipUpdate = true;
@@ -278,8 +280,6 @@ __declspec(naked) void prePhysicsMidhook() {
 
 double deltaFactor = 1.0;
 void updateDeltaFactorAndInput() {
-	updateGameState();
-	if (skipUpdate) return;
 	enableInput = false;
 	step front = stepQueue.front();
 	deltaFactor = front.deltaFactor;
@@ -330,11 +330,11 @@ float esp0x14;
 __declspec(naked) void physicsMidhook() {
 	__asm {
 		pushfd
+		cmp skipUpdate, 0
+		jnz end
 		pushad
 		call updateDeltaFactorAndInput
 		popad
-		cmp skipUpdate, 0
-		jnz end
 		cmp newFrame, 0
 		mov newFrame, 0
 		jz multiply
