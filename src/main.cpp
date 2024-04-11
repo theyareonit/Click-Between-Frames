@@ -18,12 +18,9 @@ enum GameAction : int {
 	p2Right = 5
 };
 
-enum Player : int {
+enum Player : bool {
 	Player1 = 0,
-	Player2 = 1,
-	OtherPlayer = 2,
-	BothPlayers = 3,
-	NoPlayer = 4
+	Player2 = 1
 };
 
 enum State : bool {
