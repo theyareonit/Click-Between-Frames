@@ -5,7 +5,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCScheduler.hpp>
-#include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 using namespace geode::prelude;
 
@@ -114,14 +114,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			else {
 				player = Player2;
 				if (!rc) return 0;
-				if (flags & RI_MOUSE_BUTTON_2_DOWN) {
-					inputState = Press;
-					keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", true).post();
-				}
-				else if (flags & RI_MOUSE_BUTTON_2_UP) {
-					inputState = Release;
-					keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", false).post();
-				}
+				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
+				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
 			}
 			break;
@@ -179,18 +173,6 @@ void inputThread() {
 	}
 }
 
-bool isDead = false;
-bool inDual = false;
-bool twoPlayer = false;
-bool lock2p = false;
-void updateGameState() {
-	PlayLayer *playLayer = PlayLayer::get();
-	if (!playLayer) return;
-	isDead = playLayer->m_player1->m_isDead;
-	inDual = playLayer->m_gameState.m_isDualMode;
-	twoPlayer = playLayer->m_level->m_twoPlayerMode;
-}
-
 std::queue<struct inputEvent> inputQueueCopy;
 std::queue<struct step> stepQueue;
 inputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
@@ -203,8 +185,8 @@ bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 void updateInputQueueAndTime() {
-	updateGameState();
-	if (GameManager::sharedState()->getEditorLayer() || stepCount == 0 || isDead) {
+	PlayLayer* playLayer = PlayLayer::get();
+	if (!playLayer || GameManager::sharedState()->getEditorLayer() || stepCount == 0 || playLayer->m_player1->m_isDead) {
 		firstFrame = true;
 		skipUpdate = true;
 		return;
@@ -224,7 +206,7 @@ void updateInputQueueAndTime() {
 
 		// on the first frame after entering a level, stepDelta is 0. if you do PlayerObject::update(0) at any point, the player will permanently freeze
 		if (!firstFrame) skipUpdate = false;
-		if (firstFrame) {
+		else {
 			inputQueueSize = 0;
 			enableInput = true;
 			skipUpdate = true;
@@ -253,7 +235,7 @@ void updateInputQueueAndTime() {
 						continue;
 					}
 				}
-				front = { 0, 0, PlayerButton::Jump, 0, 0 };
+				front = nextInput;
 				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - deltaTotal)});
 				break;
 			}
@@ -285,35 +267,8 @@ void updateDeltaFactorAndInput() {
 	deltaFactor = front.deltaFactor;
 	if (nextInput.time.QuadPart != 0) {
 		PlayLayer *playLayer = PlayLayer::get();
-		int player;
-
-		if (!inDual && !twoPlayer) player = Player1;
-		else if (!inDual && !lock2p) player = Player1;
-		else if (!inDual && front.input.player == Player1) player = Player1;
-		else if (!inDual) player = NoPlayer;
-		else if (!twoPlayer) player = BothPlayers;
-		else if (nextInput.player == Player1) player = Player1;
-		else player = Player2;
-
 		enableInput = true;
-		if (player == Player1) {
-			if (nextInput.inputState == Press) playLayer->m_player1->pushButton(nextInput.inputType);
-			else playLayer->m_player1->releaseButton(nextInput.inputType);
-		}
-		else if (player == Player2) {
-			if (nextInput.inputState == Press) playLayer->m_player2->pushButton(nextInput.inputType);
-			else playLayer->m_player2->releaseButton(nextInput.inputType);
-		}
-		else if (player == BothPlayers) {
-			if (nextInput.inputState == Press) {
-				playLayer->m_player1->pushButton(nextInput.inputType);
-				playLayer->m_player2->pushButton(nextInput.inputType);
-			}
-			else {
-				playLayer->m_player1->releaseButton(nextInput.inputType);
-				playLayer->m_player2->releaseButton(nextInput.inputType);
-			}
-		}
+		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, !nextInput.player);
 		enableInput = false;
 	}
 	nextInput = front.input;
@@ -424,30 +379,15 @@ class $modify(CCScheduler) {
 	}
 };
 
-class $modify(PlayerObject) {
+class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
-		self.setHookPriority("PlayerObject::pushButton", INT_MIN);
-		self.setHookPriority("PlayerObject::releaseButton", INT_MIN);
+		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
 	}
 
-	void pushButton(PlayerButton button) {
-		if (this->playerType() == OtherPlayer || enableInput) {
-			PlayerObject::pushButton(button);
+	void handleButton(bool down, int button, bool isPlayer1) {
+		if (enableInput) {
+			GJBaseGameLayer::handleButton(down, button, isPlayer1);
 		}
-	}
-
-	void releaseButton(PlayerButton button) {
-		if (this->playerType() == OtherPlayer || enableInput) {
-			PlayerObject::releaseButton(button);
-		}
-	}
-
-	int playerType() {
-		PlayLayer *playLayer;
-		if (!(playLayer = PlayLayer::get())) return OtherPlayer;
-		if (this == playLayer->m_player1) return Player1;
-		else if (this == playLayer->m_player2) return Player2;
-		else return OtherPlayer;
 	}
 };
 
