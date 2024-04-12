@@ -219,21 +219,21 @@ void updateInputQueueAndTime() {
 
 		constexpr double smallestFloat = std::numeric_limits<float>::min(); // ensures deltaFactor can never be 0, even after being converted to float
 		for (int i = 0; i < stepCount; i++) {
-			double deltaTotal = 0.0;
+			double lastDFactor = 0.0;
 			while (true) {
 				inputEvent front;
 				if (!inputQueueCopy.empty()) {
 					front = inputQueueCopy.front();
 					if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
 						double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-						stepQueue.emplace(step{ front, std::clamp(dFactor - deltaTotal, smallestFloat, 1.0) });
-						deltaTotal += dFactor;
+						stepQueue.emplace(step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0) });
+						lastDFactor = dFactor;
 						inputQueueCopy.pop();
 						continue;
 					}
 				}
 				front = nextInput;
-				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - deltaTotal)});
+				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - lastDFactor)});
 				break;
 			}
 		}
