@@ -4,7 +4,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/CCScheduler.hpp>
+#include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 using namespace geode::prelude;
@@ -174,6 +174,7 @@ std::queue<struct inputEvent> inputQueueCopy;
 std::queue<struct step> stepQueue;
 inputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
 LARGE_INTEGER lastFrameTime;
+LARGE_INTEGER lastPhysicsFrameTime;
 LARGE_INTEGER currentFrameTime;
 int inputQueueSize;
 int stepCount;
@@ -181,9 +182,11 @@ bool newFrame = true;
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
+bool lateCutoff;
 void updateInputQueueAndTime() {
 	PlayLayer* playLayer = PlayLayer::get();
 	if (!playLayer || GameManager::sharedState()->getEditorLayer() || stepCount == 0 || playLayer->m_player1->m_isDead) {
+		enableInput = true;
 		firstFrame = true;
 		skipUpdate = true;
 		return;
@@ -191,23 +194,32 @@ void updateInputQueueAndTime() {
 	else {
 		nextInput = { 0, 0, PlayerButton::Jump, 0, 0 };
 		std::queue<struct step>().swap(stepQueue); // shouldnt do anything but just in case
-		lastFrameTime = currentFrameTime;
+		lastFrameTime = lastPhysicsFrameTime;
 		newFrame = true;
 
 		// queryperformancecounter is done within the critical section to prevent a race condition which could cause dropped inputs
 		EnterCriticalSection(&inputQueueLock);
-		inputQueueCopy = inputQueue;
-		std::queue<struct inputEvent>().swap(inputQueue);
-		QueryPerformanceCounter(&currentFrameTime);
+		if (lateCutoff) {
+			QueryPerformanceCounter(&currentFrameTime);
+			inputQueueCopy = inputQueue;
+			std::queue<struct inputEvent>().swap(inputQueue);
+		}
+		else {
+			while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
+				inputQueueCopy.push(inputQueue.front());
+				inputQueue.pop();
+			}
+		}
 		LeaveCriticalSection(&inputQueueLock);
+		lastPhysicsFrameTime = currentFrameTime;
 
 		// on the first frame after entering a level, stepDelta is 0. if you do PlayerObject::update(0) at any point, the player will permanently freeze
 		if (!firstFrame) skipUpdate = false;
 		else {
 			inputQueueSize = 0;
-			enableInput = true;
 			skipUpdate = true;
 			firstFrame = false;
+			if (!lateCutoff) std::queue<struct inputEvent>().swap(inputQueueCopy);
 			return;
 		}
 
@@ -356,23 +368,25 @@ void updateKeybinds() {
 class $modify(PlayLayer) {
 	bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects) {
 		updateKeybinds();
+		lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
 		return PlayLayer::init(level, useReplay, dontCreateObjects);
 	}
 };
 
-class $modify(CCScheduler) {
-	void update(float dTime) {
-		// clear queue if the player is not in a level or is paused
+class $modify(CCEGLView) {
+	void pollEvents() {
+		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
 		if (!playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
+			firstFrame = true;
+			enableInput = true;
+			std::queue<struct inputEvent>().swap(inputQueueCopy);
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
 			LeaveCriticalSection(&inputQueueLock);
-			firstFrame = true;
-			enableInput = true;
 		}
-		CCScheduler::update(dTime);
+		CCEGLView::pollEvents();
 	}
 };
 
