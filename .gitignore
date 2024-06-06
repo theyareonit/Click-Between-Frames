@@ -30,29 +30,3 @@
 *.exe
 *.out
 *.app
-
-# Macos be like
-**/.DS_Store
-
-# Cache files for Sublime Text
-*.tmlanguage.cache
-*.tmPreferences.cache
-*.stTheme.cache
-
-# Ignore build folders
-**/build
-# Ignore platform specific build folders
-build-*/
-
-# Workspace files are user-specific
-*.sublime-workspace
-
-# ILY vscode
-**/.vscode
-.idea/
-
-# clangd
-.cache/
-
-# Visual Studio
-.vs/
