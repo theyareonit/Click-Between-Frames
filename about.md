@@ -1,9 +1,10 @@
-# What does it do
+# Click Between Frames (CBF)
 
-This mod allows your inputs to register in between visual frames, which drastically increases input precision on low framerates like 60FPS.
-It's similar to TPS Bypass or Draw Divide, but with much less lag and far fewer physics-related bugs.
+## What Does CBF Do
 
-# How to use
+This mod allows your inputs to register in between visual frames, drastically increasing input precision at low framerates, such as 60 FPS. It is similar to TPS Bypass or Draw Divide, but with significantly less lag and fewer physics-related bugs.
+
+## How to Use
 
 To edit keybinds, go to the GD options menu and click the "Keys" button in the top right (Mega Hack rebinds won't work).
 To enable right click input, use the mod options menu.
@@ -13,12 +14,12 @@ Other FPS values will have worse input precision without Physics Bypass, due to 
 
 Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 
-# Known issues
+## Known Issues
 
-- This mod does not work with existing bots
-- Follow triggers will stutter for 1 frame after clicking
-- Moving platforms have strange physics in platformer mode
-- Controller input is not yet supported
+- This mod does not work with existing bots.
+- Follow triggers will stutter for 1 frame after clicking.
+- Moving platforms have strange physics in platformer mode.
+- Controller input is not yet supported.
 
 Icon by alex/sincos.
 
