@@ -1,6 +1,6 @@
 {
-	"geode": "2.0.0-beta.23",
-	"gd": "2.204",
+	"geode": "2.0.0-beta.27",
+	"gd": "2.205",
 	"version": "v1.0.9",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
@@ -28,13 +28,13 @@
 	"settings": {
 		"right-click": {
 			"name": "Right Click P2",
-			"description": "Use right click for player 2 jump",
+			"description": "Use right click for player 2 jump.",
 			"type": "bool",
 			"default": false
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
-			"description": "Slightly reduces input lag, but also slightly reduces precision",
+			"description": "Slightly reduces input lag, but also slightly reduces precision.",
 			"type": "bool",
 			"default": false
 		}
