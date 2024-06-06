@@ -22,5 +22,3 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 - Controller input is not yet supported.
 
 Icon by alex/sincos.
-
-If you like the mod, please consider [donating](https://donate.stripe.com/aEU14Eaw9cgiam4288)!
