@@ -1,4 +1,4 @@
-﻿{
+{
   "configurations": [
     {
       "name": "x86-Release",
@@ -9,7 +9,7 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
-      "inheritEnvironments": [ "msvc_x86" ],
+      "inheritEnvironments": ["msvc_x86"],
       "variables": []
     }
   ]
