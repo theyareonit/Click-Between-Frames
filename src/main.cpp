@@ -404,23 +404,52 @@ void physicsMidhook() {
 }
 
 void updateKeybinds() {
-    // Updated updateKeybinds to use a temporary variable to handle the ignored return value warning
+    // Use a temporary variable to handle the ignored return value warning
     std::vector<geode::Ref<keybinds::Bind>> v;
+    
+    // Lock the critical section to ensure thread safety
     EnterCriticalSection(&keybindsLock);
+
+    // Update keybinds for player 1
     enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
-    inputBinds->clear();
+    inputBinds[p1Jump].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
-    for (int i = 0; i < v.size(); i++) inputBinds[p1Jump].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p1Jump].emplace(v[i]->getHash());
+    }
+
+    inputBinds[p1Left].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
-    for (int i = 0; i < v.size(); i++) inputBinds[p1Left].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p1Left].emplace(v[i]->getHash());
+    }
+
+    inputBinds[p1Right].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
-    for (int i = 0; i < v.size(); i++) inputBinds[p1Right].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p1Right].emplace(v[i]->getHash());
+    }
+
+    // Update keybinds for player 2
+    inputBinds[p2Jump].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
-    for (int i = 0; i < v.size(); i++) inputBinds[p2Jump].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p2Jump].emplace(v[i]->getHash());
+    }
+
+    inputBinds[p2Left].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
-    for (int i = 0; i < v.size(); i++) inputBinds[p2Left].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p2Left].emplace(v[i]->getHash());
+    }
+
+    inputBinds[p2Right].clear();
     v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
-    for (int i = 0; i < v.size(); i++) inputBinds[p2Right].emplace(v[i]->getHash());
+    for (size_t i = 0; i < v.size(); ++i) {
+        inputBinds[p2Right].emplace(v[i]->getHash());
+    }
+
+    // Release the lock on the critical section
     LeaveCriticalSection(&keybindsLock);
 }
 
