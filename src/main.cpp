@@ -351,35 +351,35 @@ void physicsMidhook() {
         "jz multiply\n\t"
 
         // Copy the value of every stack variable dependent on stepDelta
-        "movsd %%xmm0, %[esp0x3c_]\n\t"
-        "movsd %[esp0x3c_], %%xmm0\n\t"
+        "movq %[esp0x3c_], %%rax\n\t"
+        "movq %%rax, %[esp0x3c]\n\t"
 
-        "movsd %%xmm0, %[esp0x4c_]\n\t"
-        "movsd %[esp0x4c_], %%xmm0\n\t"
+        "movq %[esp0x4c_], %%rax\n\t"
+        "movq %%rax, %[esp0x4c]\n\t"
 
-        "movsd %%xmm0, %[esp0x44_]\n\t"
-        "movsd %[esp0x44_], %%xmm0\n\t"
+        "movq %[esp0x44_], %%rax\n\t"
+        "movq %%rax, %[esp0x44]\n\t"
 
-        "movss %%xmm0, %[esp0x14_]\n\t"
         "movss %[esp0x14_], %%xmm0\n\t"
+        "movss %%xmm0, %[esp0x14]\n\t"
 
     "multiply:\n\t"
-        "movsd %[esp0x3c_], %%xmm0\n\t"
+        "movq %[esp0x3c], %%rax\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x3c_]\n\t"
+        "movsd %%xmm0, %[esp0x3c]\n\t"
 
-        "movsd %[esp0x4c_], %%xmm0\n\t"
+        "movq %[esp0x4c], %%rax\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x4c_]\n\t"
+        "movsd %%xmm0, %[esp0x4c]\n\t"
 
-        "movsd %[esp0x44_], %%xmm0\n\t"
+        "movq %[esp0x44], %%rax\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x44_]\n\t"
+        "movsd %%xmm0, %[esp0x44]\n\t"
 
-        "movss %[esp0x14_], %%xmm0\n\t"
+        "movss %[esp0x14], %%xmm0\n\t"
         "cvtsd2ss %%xmm1, %[deltaFactor]\n\t"
         "mulss %%xmm1, %%xmm0\n\t"
-        "movss %%xmm0, %[esp0x14_]\n\t"
+        "movss %%xmm0, %[esp0x14]\n\t"
 
     "skipUpdateEnd:\n\t"
         "popfq\n\t"
@@ -395,6 +395,10 @@ void physicsMidhook() {
           [esp0x14_] "m" (esp0x14_),
           [deltaFactor] "m" (deltaFactor),
           [edi_0x2c28] "m" (edi),  // Replace with proper declaration of edi
+          [esp0x3c] "m" (esp0x3c),
+          [esp0x4c] "m" (esp0x4c),
+          [esp0x44] "m" (esp0x44),
+          [esp0x14] "m" (esp0x14),
           [physicsReturn] "r" (physicsReturn)
         : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
     );
