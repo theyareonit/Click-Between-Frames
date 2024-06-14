@@ -7,6 +7,7 @@
 #include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
+#include <cstdint>
 using namespace geode::prelude;
 
 enum GameAction : int {
@@ -255,6 +256,7 @@ void updateInputQueueAndTime() {
 // this can be done without a midhook if you feel like rewriting the step calculation algorithm
 intptr_t prePhysicsReturn;
 intptr_t inputQueueSizePtr;
+
 void prePhysicsMidhook() {
     __asm__ __volatile__ (
         "pushfq\n\t"
@@ -268,7 +270,7 @@ void prePhysicsMidhook() {
         "pushq %%r9\n\t"
         "pushq %%r10\n\t"
         "pushq %%r11\n\t"
-        "call %[updateInputQueueAndTime]\n\t"
+        "callq *%[updateInputQueueAndTime]\n\t" // Use callq for 64-bit, call for 32-bit
         "popq %%r11\n\t"
         "popq %%r10\n\t"
         "popq %%r9\n\t"
@@ -279,12 +281,13 @@ void prePhysicsMidhook() {
         "popq %%rcx\n\t"
         "popq %%rbx\n\t"
         "popq %%rax\n\t"
-        "mov %[inputQueueSizePtr], %%rsi\n\t"  // Move inputQueueSizePtr to rsi register
+        "movq %[inputQueueSizePtr], %%rsi\n\t"  // Use movq for 64-bit, movl for 32-bit
         "popfq\n\t"
-        "mov $0x0, %[returnValue]\n\t"
-        "jmp *%[prePhysicsReturn]\n\t"
-        : [returnValue] "=m" (prePhysicsReturn), [inputQueueSizePtr] "=m" (inputQueueSizePtr)
-        : [updateInputQueueAndTime] "r" (updateInputQueueAndTime), [prePhysicsReturn] "r" (prePhysicsReturn)
+        "movq $0x0, %[returnValue]\n\t"         // Use movq for 64-bit, movl for 32-bit
+        "jmpq *%[prePhysicsReturn]\n\t"         // Use jmpq for 64-bit, jmp for 32-bit
+        :
+        : [returnValue] "m" (prePhysicsReturn), [inputQueueSizePtr] "m" (inputQueueSizePtr),
+          [updateInputQueueAndTime] "r" (updateInputQueueAndTime), [prePhysicsReturn] "r" (prePhysicsReturn)
         : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"
     );
 }
@@ -311,12 +314,15 @@ double esp0x3c;
 double esp0x4c;
 double esp0x44;
 float esp0x14;
+
 void physicsMidhook() {
     char edi;
-    intptr_t esp0x3c, esp0x4c, esp0x44, esp0x14;
+    intptr_t esp0x3c_, esp0x4c_, esp0x44_;
+    float esp0x14_;
+
     __asm__ __volatile__ (
         "pushfq\n\t"
-        "cmp %[skipUpdate], 0\n\t"
+        "cmpb $0, %[skipUpdate]\n\t"
         "jnz skipUpdateEnd\n\t"
         "pushq %%rax\n\t"
         "pushq %%rbx\n\t"
@@ -328,7 +334,7 @@ void physicsMidhook() {
         "pushq %%r9\n\t"
         "pushq %%r10\n\t"
         "pushq %%r11\n\t"
-        "call %[updateDeltaFactorAndInput]\n\t"
+        "callq *%[updateDeltaFactorAndInput]\n\t"
         "popq %%r11\n\t"
         "popq %%r10\n\t"
         "popq %%r9\n\t"
@@ -339,59 +345,60 @@ void physicsMidhook() {
         "popq %%rcx\n\t"
         "popq %%rbx\n\t"
         "popq %%rax\n\t"
-        "cmp %[newFrame], 0\n\t"
-        "mov %[newFrame], 0\n\t"
+        "cmpb $0, %[newFrame]\n\t"
+        "movb $0, %[newFrame]\n\t"
         "jz multiply\n\t"
 
         // Copy the value of every stack variable dependent on stepDelta
-        "movsd %%xmm0, %[esp0x3c]\n\t"
-        "movsd %[esp0x3c], %%xmm0\n\t"
+        "movsd %%xmm0, %[esp0x3c_]\n\t"
+        "movsd %[esp0x3c_], %%xmm0\n\t"
 
-        "movsd %%xmm0, %[esp0x4c]\n\t"
-        "movsd %[esp0x4c], %%xmm0\n\t"
+        "movsd %%xmm0, %[esp0x4c_]\n\t"
+        "movsd %[esp0x4c_], %%xmm0\n\t"
 
-        "movsd %%xmm0, %[esp0x44]\n\t"
-        "movsd %[esp0x44], %%xmm0\n\t"
+        "movsd %%xmm0, %[esp0x44_]\n\t"
+        "movsd %[esp0x44_], %%xmm0\n\t"
 
-        "movss %%xmm0, %[esp0x14]\n\t"
-        "movss %[esp0x14], %%xmm0\n\t"
+        "movss %%xmm0, %[esp0x14_]\n\t"
+        "movss %[esp0x14_], %%xmm0\n\t"
 
     "multiply:\n\t"
-        "movsd %[esp0x3c], %%xmm0\n\t"
+        "movsd %[esp0x3c_], %%xmm0\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x3c]\n\t"
+        "movsd %%xmm0, %[esp0x3c_]\n\t"
 
-        "movsd %[esp0x4c], %%xmm0\n\t"
+        "movsd %[esp0x4c_], %%xmm0\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x4c]\n\t"
+        "movsd %%xmm0, %[esp0x4c_]\n\t"
 
-        "movsd %[esp0x44], %%xmm0\n\t"
+        "movsd %[esp0x44_], %%xmm0\n\t"
         "mulsd %[deltaFactor], %%xmm0\n\t"
-        "movsd %%xmm0, %[esp0x44]\n\t"
+        "movsd %%xmm0, %[esp0x44_]\n\t"
 
-        "movss %[esp0x14], %%xmm0\n\t"
+        "movss %[esp0x14_], %%xmm0\n\t"
         "cvtsd2ss %%xmm1, %[deltaFactor]\n\t"
         "mulss %%xmm1, %%xmm0\n\t"
-        "movss %%xmm0, %[esp0x14]\n\t"
+        "movss %%xmm0, %[esp0x14_]\n\t"
 
     "skipUpdateEnd:\n\t"
         "popfq\n\t"
-        "cmpb $0x0, %[edi_0x2c28]\n\t"
+        "cmpb $0, %[edi_0x2c28]\n\t"
         "jmp *%[physicsReturn]\n\t"
         :
         : [skipUpdate] "m" (skipUpdate),
           [updateDeltaFactorAndInput] "r" (updateDeltaFactorAndInput),
           [newFrame] "m" (newFrame),
-          [esp0x3c] "m" (esp0x3c),
-          [esp0x4c] "m" (esp0x4c),
-          [esp0x44] "m" (esp0x44),
-          [esp0x14] "m" (esp0x14),
+          [esp0x3c_] "m" (esp0x3c_),
+          [esp0x4c_] "m" (esp0x4c_),
+          [esp0x44_] "m" (esp0x44_),
+          [esp0x14_] "m" (esp0x14_),
           [deltaFactor] "m" (deltaFactor),
-          [edi_0x2c28] "m" (edi),  // Replace with proper declaration of edi
+          [edi_0x2c28] "m" (edi),  // Assuming edi is a char or int
           [physicsReturn] "r" (physicsReturn)
         : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
     );
 }
+
 
 void updateKeybinds() {
 	std::vector<geode::Ref<keybinds::Bind>> v;
