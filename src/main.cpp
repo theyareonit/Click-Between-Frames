@@ -7,7 +7,7 @@
 #include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
-#include <cstdint>
+
 using namespace geode::prelude;
 
 enum GameAction : int {
@@ -318,7 +318,7 @@ float esp0x14;
 void physicsMidhook() {
     char edi;  // Assuming edi is declared somewhere else
 
-    intptr_t esp0x3c_, esp0x4c_, esp0x44_;
+    long long esp0x3c_, esp0x4c_, esp0x44_;  // Using native long long for intptr_t
     float esp0x14_;
 
     __asm__ __volatile__ (
@@ -377,7 +377,6 @@ void physicsMidhook() {
         "movsd %%xmm0, %[esp0x44]\n\t"
 
         "movss %[esp0x14], %%xmm0\n\t"
-        "cvtsd2ss %%xmm1, %[deltaFactor]\n\t"
         "mulss %%xmm1, %%xmm0\n\t"
         "movss %%xmm0, %[esp0x14]\n\t"
 
