@@ -316,7 +316,8 @@ double esp0x44;
 float esp0x14;
 
 void physicsMidhook() {
-    char edi;
+    char edi;  // Assuming edi is declared somewhere else
+
     intptr_t esp0x3c_, esp0x4c_, esp0x44_;
     float esp0x14_;
 
@@ -393,12 +394,11 @@ void physicsMidhook() {
           [esp0x44_] "m" (esp0x44_),
           [esp0x14_] "m" (esp0x14_),
           [deltaFactor] "m" (deltaFactor),
-          [edi_0x2c28] "m" (edi),  // Assuming edi is a char or int
+          [edi_0x2c28] "m" (edi),  // Replace with proper declaration of edi
           [physicsReturn] "r" (physicsReturn)
         : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
     );
 }
-
 
 void updateKeybinds() {
 	std::vector<geode::Ref<keybinds::Bind>> v;
