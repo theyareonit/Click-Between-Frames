@@ -26,17 +26,16 @@ endif()
 # Include Geode SDK and dependencies
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
-# Link required libraries using keyword signature
+# Link required libraries using plain signature
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/geode-deps/geode.custom-keybinds/geode.custom-keybinds.lib
     D:/a/Click-Between-Frames/Click-Between-Frames/geode-sdk-clone/loader/include/link/win64/libcocos2d.lib
     D:/a/Click-Between-Frames/Click-Between-Frames/geode-sdk-clone/loader/include/link/win64/libExtensions.lib
     D:/a/Click-Between-Frames/Click-Between-Frames/geode-sdk-clone/loader/include/link/win64/ssl.lib
 )
 
-# Link Geode libraries using keyword signature
-target_link_libraries(${PROJECT_NAME} PRIVATE Geode::Core Geode::Extensions Geode::CustomKeybinds)
+# Link Geode libraries using plain signature
+target_link_libraries(${PROJECT_NAME} Geode::Core Geode::Extensions Geode::CustomKeybinds)
 
-# Setup Geode mod (assuming it also uses keyword signature)
+# Setup Geode mod (assuming it uses plain signature)
 setup_geode_mod(${PROJECT_NAME})
