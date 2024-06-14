@@ -312,7 +312,8 @@ double esp0x4c;
 double esp0x44;
 float esp0x14;
 void physicsMidhook() {
-    char edi_0x2c28;  // Define edi_0x2c28 explicitly
+    char edi;
+    intptr_t esp0x3c, esp0x4c, esp0x44, esp0x14;
     __asm__ __volatile__ (
         "pushfq\n\t"
         "cmp %[skipUpdate], 0\n\t"
@@ -386,9 +387,9 @@ void physicsMidhook() {
           [esp0x44] "m" (esp0x44),
           [esp0x14] "m" (esp0x14),
           [deltaFactor] "m" (deltaFactor),
-          [edi_0x2c28] "m" (*(volatile char *)(edi + 0x2c28)),  // Use volatile char *(edi + 0x2c28)
+          [edi_0x2c28] "m" (edi),  // Replace with proper declaration of edi
           [physicsReturn] "r" (physicsReturn)
-        : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
+        : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
     );
 }
 
