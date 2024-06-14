@@ -254,19 +254,43 @@ void updateInputQueueAndTime() {
 
 // this can be done without a midhook if you feel like rewriting the step calculation algorithm
 intptr_t prePhysicsReturn;
-__declspec(naked) void prePhysicsMidhook() {
-	__asm {
-		mov stepCount, esi
-		pushfd
-		pushad 
-		call updateInputQueueAndTime
-		popad
-		add esi, inputQueueSize
-		mov dword ptr [esp + 0x1c + 0x4], esi // +0x4 bc pushfd
-		popfd
-		mov dword ptr [esp + 0x18], 0x0 // instruction replaced by the jmp
-		jmp prePhysicsReturn
-	}
+void prePhysicsMidhook() {
+    __asm__ __volatile__ (
+        "mov %[stepCount], %%rsi\n\t"
+        "pushfq\n\t"
+        "pushq %%rax\n\t"
+        "pushq %%rbx\n\t"
+        "pushq %%rcx\n\t"
+        "pushq %%rdx\n\t"
+        "pushq %%rsi\n\t"
+        "pushq %%rdi\n\t"
+        "pushq %%r8\n\t"
+        "pushq %%r9\n\t"
+        "pushq %%r10\n\t"
+        "pushq %%r11\n\t"
+        "call *%[updateInputQueueAndTime]\n\t"
+        "popq %%r11\n\t"
+        "popq %%r10\n\t"
+        "popq %%r9\n\t"
+        "popq %%r8\n\t"
+        "popq %%rdi\n\t"
+        "popq %%rsi\n\t"
+        "popq %%rdx\n\t"
+        "popq %%rcx\n\t"
+        "popq %%rbx\n\t"
+        "popq %%rax\n\t"
+        "add %%rsi, %[inputQueueSize]\n\t"
+        "mov %%rsi, [%%rsp + 0x1c + 0x8]\n\t"
+        "popfq\n\t"
+        "mov $0x0, [%%rsp + 0x18 + 0x8]\n\t"
+        "jmp *%[prePhysicsReturn]\n\t"
+        :
+        : [stepCount] "m" (stepCount),
+          [updateInputQueueAndTime] "r" (updateInputQueueAndTime),
+          [inputQueueSize] "m" (inputQueueSize),
+          [prePhysicsReturn] "r" (prePhysicsReturn)
+        : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"
+    );
 }
 
 double deltaFactor = 1.0;
@@ -291,59 +315,86 @@ double esp0x3c;
 double esp0x4c;
 double esp0x44;
 float esp0x14;
-__declspec(naked) void physicsMidhook() {
-	__asm {
-		pushfd
-		cmp skipUpdate, 0
-		jnz end
-		pushad
-		call updateDeltaFactorAndInput
-		popad
-		cmp newFrame, 0
-		mov newFrame, 0
-		jz multiply
+void physicsMidhook() {
+    __asm__ __volatile__ (
+        "pushfq\n\t"
+        "cmp %[skipUpdate], 0\n\t"
+        "jnz end\n\t"
+        "pushq %%rax\n\t"
+        "pushq %%rbx\n\t"
+        "pushq %%rcx\n\t"
+        "pushq %%rdx\n\t"
+        "pushq %%rsi\n\t"
+        "pushq %%rdi\n\t"
+        "pushq %%r8\n\t"
+        "pushq %%r9\n\t"
+        "pushq %%r10\n\t"
+        "pushq %%r11\n\t"
+        "call *%[updateDeltaFactorAndInput]\n\t"
+        "popq %%r11\n\t"
+        "popq %%r10\n\t"
+        "popq %%r9\n\t"
+        "popq %%r8\n\t"
+        "popq %%rdi\n\t"
+        "popq %%rsi\n\t"
+        "popq %%rdx\n\t"
+        "popq %%rcx\n\t"
+        "popq %%rbx\n\t"
+        "popq %%rax\n\t"
+        "cmp %[newFrame], 0\n\t"
+        "mov %[newFrame], 0\n\t"
+        "jz multiply\n\t"
 
-		// copy the value of every stack variable dependent on stepDelta
-		// idk if all of these are necessary/what all of them do
+        // Copy the value of every stack variable dependent on stepDelta
+        "movsd %%xmm0, [%%rsp + 0x3c + 0x8]\n\t"
+        "movsd %[esp0x3c], %%xmm0\n\t"
 
-		movsd xmm0, qword ptr[esp + 0x3c + 0x4] // +0x4 bc of pushfd once again
-		movsd esp0x3c, xmm0
+        "movsd %%xmm0, [%%rsp + 0x4c + 0x8]\n\t"
+        "movsd %[esp0x4c], %%xmm0\n\t"
 
-		movsd xmm0, qword ptr[esp + 0x4c + 0x4]
-		movsd esp0x4c, xmm0
+        "movsd %%xmm0, [%%rsp + 0x44 + 0x8]\n\t"
+        "movsd %[esp0x44], %%xmm0\n\t"
 
-		movsd xmm0, qword ptr[esp + 0x44 + 0x4]
-		movsd esp0x44, xmm0
+        "movss %%xmm0, [%%rsp + 0x14 + 0x8]\n\t"
+        "movss %[esp0x14], %%xmm0\n\t"
 
-		movss xmm0, dword ptr[esp + 0x14 + 0x4]
-		movss esp0x14, xmm0
+    "multiply:\n\t"
+        "movsd %%xmm0, %[esp0x3c]\n\t"
+        "mulsd %%xmm0, %[deltaFactor]\n\t"
+        "movsd [%%rsp + 0x3c + 0x8], %%xmm0\n\t"
 
-	multiply:
+        "movsd %%xmm0, %[esp0x4c]\n\t"
+        "mulsd %%xmm0, %[deltaFactor]\n\t"
+        "movsd [%%rsp + 0x4c + 0x8], %%xmm0\n\t"
 
-		movsd xmm0, esp0x3c
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x3c + 0x4], xmm0
-		
-		movsd xmm0, esp0x4c
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x4c + 0x4], xmm0
-		
-		movsd xmm0, esp0x44
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x44 + 0x4], xmm0
-		
-		movss xmm0, esp0x14
-		cvtsd2ss xmm1, deltaFactor
-		mulss xmm0, xmm1
-		movss dword ptr[esp + 0x14 + 0x4], xmm0
+        "movsd %%xmm0, %[esp0x44]\n\t"
+        "mulsd %%xmm0, %[deltaFactor]\n\t"
+        "movsd [%%rsp + 0x44 + 0x8], %%xmm0\n\t"
 
-	end:
+        "movss %%xmm0, %[esp0x14]\n\t"
+        "cvtsd2ss %%xmm1, %[deltaFactor]\n\t"
+        "mulss %%xmm0, %%xmm1\n\t"
+        "movss [%%rsp + 0x14 + 0x8], %%xmm0\n\t"
 
-		popfd
-		cmp byte ptr[edi + 0x2c28], 0x0 // the instruction replaced by the jmp
-		jmp physicsReturn
-	}
+    "end:\n\t"
+        "popfq\n\t"
+        "cmpb $0x0, %[edi_0x2c28]\n\t"
+        "jmp *%[physicsReturn]\n\t"
+        :
+        : [skipUpdate] "m" (skipUpdate),
+          [updateDeltaFactorAndInput] "r" (updateDeltaFactorAndInput),
+          [newFrame] "m" (newFrame),
+          [esp0x3c] "m" (esp0x3c),
+          [esp0x4c] "m" (esp0x4c),
+          [esp0x44] "m" (esp0x44),
+          [esp0x14] "m" (esp0x14),
+          [deltaFactor] "m" (deltaFactor),
+          [edi_0x2c28] "m" (*(volatile char *)(edi + 0x2c28)),
+          [physicsReturn] "r" (physicsReturn)
+        : "memory", "cc", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "xmm0", "xmm1"
+    );
 }
+
 
 void updateKeybinds() {
 	std::vector<geode::Ref<keybinds::Bind>> v;
