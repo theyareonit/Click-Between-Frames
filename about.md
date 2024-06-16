@@ -16,7 +16,7 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 # Known issues
 
 - This mod does not work with bots
-- Follow Player X will desync after clicking
+- Lock to player X will desync after clicking
 - Controller input is not yet supported
 
 Icon by alex/sincos.
