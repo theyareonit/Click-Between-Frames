@@ -11,7 +11,7 @@
 	"dependencies": [
 		{
 			"id": "geode.custom-keybinds",
-			"version": ">=v1.6.0-beta.1",
+			"version": ">=v1.6.0",
 			"importance": "required"
 		}
 	],
@@ -36,7 +36,7 @@
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
-			"description": "Slightly reduces input lag, but also slightly reduces precision",
+			"description": "Slightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
 			"type": "bool",
 			"default": false
 		}
