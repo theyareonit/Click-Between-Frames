@@ -86,7 +86,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			bool shouldEmplace = true;
 			player = Player1;
+
 			EnterCriticalSection(&keybindsLock);
+
 			if (inputBinds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
 			else if (inputBinds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
 			else if (inputBinds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
@@ -98,6 +100,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else shouldEmplace = false;
 			}
 			if (!inputState) heldInputs.emplace(vkey);
+
 			LeaveCriticalSection(&keybindsLock);
 
 			if (!shouldEmplace) return 0; // has to be done outside of the critical section
@@ -112,6 +115,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			EnterCriticalSection(&keybindsLock);
 			bool rc = enableRightClick;
 			LeaveCriticalSection(&keybindsLock);
+
 			if (flags & RI_MOUSE_BUTTON_1_DOWN) inputState = Press;
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
@@ -137,6 +141,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	EnterCriticalSection(&inputQueueLock);
 	inputQueue.emplace(inputEvent{ time, inputType, inputState, player });
 	LeaveCriticalSection(&inputQueueLock);
+
 	return 0;
 }
 
@@ -197,8 +202,8 @@ void updateInputQueueAndTime(int stepCount) {
 	}
 	else {
 		nextInput = emptyInput;
-		std::queue<struct step>().swap(stepQueue); // just in case
 		lastFrameTime = lastPhysicsFrameTime;
+		std::queue<struct step>().swap(stepQueue); // just in case
 
 		// queryperformancecounter is done within the critical section to prevent a race condition which could cause dropped inputs
 		EnterCriticalSection(&inputQueueLock);
@@ -214,6 +219,7 @@ void updateInputQueueAndTime(int stepCount) {
 			}
 		}
 		LeaveCriticalSection(&inputQueueLock);
+
 		lastPhysicsFrameTime = currentFrameTime;
 
 		if (!firstFrame) skipUpdate = false;
@@ -276,9 +282,12 @@ step updateDeltaFactorAndInput() {
 
 void updateKeybinds() {
 	std::vector<geode::Ref<keybinds::Bind>> v;
+
 	EnterCriticalSection(&keybindsLock);
+
 	enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
 	inputBinds->clear();
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
 	for (int i = 0; i < v.size(); i++) inputBinds[p1Jump].emplace(v[i]->getHash());
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
@@ -291,6 +300,7 @@ void updateKeybinds() {
 	for (int i = 0; i < v.size(); i++) inputBinds[p2Left].emplace(v[i]->getHash());
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
 	for (int i = 0; i < v.size(); i++) inputBinds[p2Right].emplace(v[i]->getHash());
+
 	LeaveCriticalSection(&keybindsLock);
 }
 
@@ -305,18 +315,23 @@ class $modify(PlayLayer) {
 
 class $modify(CCDirector) {
 	void setDeltaTime(float dTime) {
-		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
+
+		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
+
 		if (!playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
 			firstFrame = true;
 			skipUpdate = true;
 			enableInput = true;
+
 			std::queue<struct inputEvent>().swap(inputQueueCopy);
+
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
 			LeaveCriticalSection(&inputQueueLock);
 		}
+
 		CCDirector::setDeltaTime(dTime);
 	}
 };
@@ -386,6 +401,7 @@ $on_mod(Loaded) {
 		log::error("Failed to initialize input queue lock");
 		return;
 	}
+
 	if (!InitializeCriticalSectionAndSpinCount(&keybindsLock, 0x00004000)) {
 		log::error("Failed to initialize keybind lock");
 		return;
@@ -394,6 +410,7 @@ $on_mod(Loaded) {
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
 	DWORD oldProtect;
 	DWORD newProtect = 0x40;
+
 	VirtualProtect(addr, 4, newProtect, &oldProtect);
 	Mod::get()->patch(addr, { 0x3d, 0x0a, 0x57, 0x3f });
 	VirtualProtect(addr, 4, oldProtect, &newProtect);
