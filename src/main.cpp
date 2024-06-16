@@ -4,8 +4,10 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/CCEGLView.hpp>
+#include <Geode/modify/CCDirector.hpp>
+//#include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
+#include <Geode/modify/PlayerObject.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 using namespace geode::prelude;
 
@@ -38,7 +40,11 @@ struct inputEvent {
 struct step {
 	inputEvent input;
 	double deltaFactor;
+	bool endStep;
 };
+
+const inputEvent emptyInput = inputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
+const step emptyStep = step{ emptyInput, 1.0, true };
 
 std::queue<struct inputEvent> inputQueue;
 std::set<size_t> inputBinds[6];
@@ -177,25 +183,22 @@ LARGE_INTEGER lastFrameTime;
 LARGE_INTEGER lastPhysicsFrameTime;
 LARGE_INTEGER currentFrameTime;
 int inputQueueSize;
-int stepCount;
-bool newFrame = true;
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 bool lateCutoff;
-void updateInputQueueAndTime() {
+void updateInputQueueAndTime(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
-	if (!playLayer || GameManager::sharedState()->getEditorLayer() || stepCount == 0 || playLayer->m_player1->m_isDead) {
+	if (!playLayer || GameManager::sharedState()->getEditorLayer() || playLayer->m_player1->m_isDead) {
 		enableInput = true;
 		firstFrame = true;
 		skipUpdate = true;
 		return;
 	}
 	else {
-		nextInput = { 0, 0, PlayerButton::Jump, 0, 0 };
-		std::queue<struct step>().swap(stepQueue); // shouldnt do anything but just in case
+		nextInput = emptyInput;
+		std::queue<struct step>().swap(stepQueue); // just in case
 		lastFrameTime = lastPhysicsFrameTime;
-		newFrame = true;
 
 		// queryperformancecounter is done within the critical section to prevent a race condition which could cause dropped inputs
 		EnterCriticalSection(&inputQueueLock);
@@ -216,7 +219,6 @@ void updateInputQueueAndTime() {
 		// on the first frame after entering a level, stepDelta is 0. if you do PlayerObject::update(0) at any point, the player will permanently freeze
 		if (!firstFrame) skipUpdate = false;
 		else {
-			inputQueueSize = 0;
 			skipUpdate = true;
 			firstFrame = false;
 			if (!lateCutoff) std::queue<struct inputEvent>().swap(inputQueueCopy);
@@ -227,7 +229,6 @@ void updateInputQueueAndTime() {
 		LARGE_INTEGER stepDelta;
 		deltaTime.QuadPart = currentFrameTime.QuadPart - lastFrameTime.QuadPart;
 		stepDelta.QuadPart = (deltaTime.QuadPart / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
-		inputQueueSize = inputQueueCopy.size();
 
 		constexpr double smallestFloat = std::numeric_limits<float>::min(); // ensures deltaFactor can never be 0, even after being converted to float
 		for (int i = 0; i < stepCount; i++) {
@@ -238,111 +239,40 @@ void updateInputQueueAndTime() {
 					front = inputQueueCopy.front();
 					if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
 						double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-						stepQueue.emplace(step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0) });
+						stepQueue.emplace(step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0), false });
 						lastDFactor = dFactor;
 						inputQueueCopy.pop();
 						continue;
 					}
 				}
 				front = nextInput;
-				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - lastDFactor)});
+				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - lastDFactor), true });
 				break;
 			}
 		}
 	}
 }
 
-// this can be done without a midhook if you feel like rewriting the step calculation algorithm
-intptr_t prePhysicsReturn;
-__declspec(naked) void prePhysicsMidhook() {
-	__asm {
-		mov stepCount, esi
-		pushfd
-		pushad 
-		call updateInputQueueAndTime
-		popad
-		add esi, inputQueueSize
-		mov dword ptr [esp + 0x1c + 0x4], esi // +0x4 bc pushfd
-		popfd
-		mov dword ptr [esp + 0x18], 0x0 // instruction replaced by the jmp
-		jmp prePhysicsReturn
-	}
-}
-
-double deltaFactor = 1.0;
-void updateDeltaFactorAndInput() {
+step updateDeltaFactorAndInput() {
 	enableInput = false;
+
+	if (stepQueue.empty()) return emptyStep;
+
 	step front = stepQueue.front();
-	deltaFactor = front.deltaFactor;
+	double deltaFactor = front.deltaFactor;
+
 	if (nextInput.time.QuadPart != 0) {
 		PlayLayer *playLayer = PlayLayer::get();
+
 		enableInput = true;
 		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, !nextInput.player);
 		enableInput = false;
 	}
+
 	nextInput = front.input;
 	stepQueue.pop();
-}
 
-// probably possible without a midhook if youre cleverer about it
-// i made sure to hook a place in the code where xmm registers dont need to be preserved
-intptr_t physicsReturn;
-double esp0x3c;
-double esp0x4c;
-double esp0x44;
-float esp0x14;
-__declspec(naked) void physicsMidhook() {
-	__asm {
-		pushfd
-		cmp skipUpdate, 0
-		jnz end
-		pushad
-		call updateDeltaFactorAndInput
-		popad
-		cmp newFrame, 0
-		mov newFrame, 0
-		jz multiply
-
-		// copy the value of every stack variable dependent on stepDelta
-		// idk if all of these are necessary/what all of them do
-
-		movsd xmm0, qword ptr[esp + 0x3c + 0x4] // +0x4 bc of pushfd once again
-		movsd esp0x3c, xmm0
-
-		movsd xmm0, qword ptr[esp + 0x4c + 0x4]
-		movsd esp0x4c, xmm0
-
-		movsd xmm0, qword ptr[esp + 0x44 + 0x4]
-		movsd esp0x44, xmm0
-
-		movss xmm0, dword ptr[esp + 0x14 + 0x4]
-		movss esp0x14, xmm0
-
-	multiply:
-
-		movsd xmm0, esp0x3c
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x3c + 0x4], xmm0
-		
-		movsd xmm0, esp0x4c
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x4c + 0x4], xmm0
-		
-		movsd xmm0, esp0x44
-		mulsd xmm0, deltaFactor
-		movsd qword ptr[esp + 0x44 + 0x4], xmm0
-		
-		movss xmm0, esp0x14
-		cvtsd2ss xmm1, deltaFactor
-		mulss xmm0, xmm1
-		movss dword ptr[esp + 0x14 + 0x4], xmm0
-
-	end:
-
-		popfd
-		cmp byte ptr[edi + 0x2c28], 0x0 // the instruction replaced by the jmp
-		jmp physicsReturn
-	}
+	return front;
 }
 
 void updateKeybinds() {
@@ -373,23 +303,26 @@ class $modify(PlayLayer) {
 	}
 };
 
-class $modify(CCEGLView) {
-	void pollEvents() {
+
+class $modify(CCDirector) {
+	void setDeltaTime(float dTime) {
 		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
 		if (!playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
 			firstFrame = true;
+			skipUpdate = true;
 			enableInput = true;
 			std::queue<struct inputEvent>().swap(inputQueueCopy);
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
 			LeaveCriticalSection(&inputQueueLock);
 		}
-		CCEGLView::pollEvents();
+		CCDirector::setDeltaTime(dTime);
 	}
 };
 
+int stepCount;
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
 		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
@@ -398,6 +331,53 @@ class $modify(GJBaseGameLayer) {
 	void handleButton(bool down, int button, bool isPlayer1) {
 		if (enableInput) {
 			GJBaseGameLayer::handleButton(down, button, isPlayer1);
+		}
+	}
+
+	float getModifiedDelta(float delta) {
+		const float modifiedDelta = GJBaseGameLayer::getModifiedDelta(delta);
+
+		PlayLayer* pl = PlayLayer::get();
+		if (pl) {
+			const float timewarpDivisor = std::max(pl->m_gameState.m_timeWarp, 1.0f);
+			stepCount = ((modifiedDelta * 60.0) / timewarpDivisor) * 4; // not sure if this is different from (delta * 240) / timewarpDivisor
+
+			if (stepCount > 0) updateInputQueueAndTime(stepCount);
+			else skipUpdate = true;
+		}
+		
+		return modifiedDelta;
+	}
+};
+
+class $modify(PlayerObject) {
+	void update(float timeFactor) {
+		if (skipUpdate) {
+			PlayerObject::update(timeFactor);
+			return;
+		}
+
+		PlayLayer* pl = PlayLayer::get();
+		if (this == pl->m_player2) return;
+
+		step step = updateDeltaFactorAndInput();
+		bool isDual = pl->m_gameState.m_isDualMode;
+		while (true) {
+			const float newTimeFactor = timeFactor * step.deltaFactor;
+
+			PlayerObject::update(newTimeFactor);
+			if (isDual) {
+				skipUpdate = true; // re-enable PlayerObject::update() for player 2
+				pl->m_player2->update(newTimeFactor);
+				skipUpdate = false;
+			}
+
+			if (step.endStep) break;
+
+			pl->checkCollisions(this, newTimeFactor, true); // true = ignore damage
+			if (isDual) pl->checkCollisions(pl->m_player2, newTimeFactor, true);
+
+			step = updateDeltaFactorAndInput();
 		}
 	}
 };
@@ -412,23 +392,6 @@ $on_mod(Loaded) {
 		return;
 	}
 
-	// surely there is a more elegant way to do midhooks. if only i knew what it was...
-	const uintptr_t prePhysicsPatch = geode::base::get() + 0x1bbaf6;
-	uint8_t prePhysicsJmp[] = "\xe9\x00\x00\x00\x00\x90\x90\x90";
-	*reinterpret_cast<DWORD *>(prePhysicsJmp + 1) = (reinterpret_cast<uintptr_t>(prePhysicsMidhook) - prePhysicsPatch) - 0x5;
-	ByteVector prePhysicsJmpVector;
-	for (int i = 0; i < 8; i++) prePhysicsJmpVector.push_back(prePhysicsJmp[i]);
-	prePhysicsReturn = (intptr_t)(prePhysicsPatch + 0x8);
-
-	const uintptr_t physicsPatch = geode::base::get() + 0x1bbb20;
-	uint8_t physicsJmp[] = "\xe9\x00\x00\x00\x00\x90\x90";
-	*reinterpret_cast<DWORD*>(physicsJmp + 1) = (reinterpret_cast<uintptr_t>(physicsMidhook) - physicsPatch) - 0x5;
-	ByteVector physicsJmpVector;
-	for (int i = 0; i < 7; i++) physicsJmpVector.push_back(physicsJmp[i]);
-	physicsReturn = (intptr_t)(physicsPatch + 0x7);
-	
-	Mod::get()->patch(reinterpret_cast<void*>(geode::base::get() + 0x2de530), {0x3d, 0x0a, 0x57, 0x3f});
-	Mod::get()->patch(reinterpret_cast<void*>(prePhysicsPatch), prePhysicsJmpVector);
-	Mod::get()->patch(reinterpret_cast<void*>(physicsPatch), physicsJmpVector);
-	std::thread *inputT = new std::thread(inputThread);
+	//Mod::get()->patch(reinterpret_cast<void*>(geode::base::get() + 0x2de530), {0x3d, 0x0a, 0x57, 0x3f});
+	std::thread(inputThread).detach();
 }
