@@ -9,6 +9,7 @@
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <geode.custom-keybinds/include/Keybinds.hpp>
+
 using namespace geode::prelude;
 
 enum GameAction : int {
@@ -47,12 +48,15 @@ const inputEvent emptyInput = inputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
 const step emptyStep = step{ emptyInput, 1.0, true };
 
 std::queue<struct inputEvent> inputQueue;
+
 std::set<size_t> inputBinds[6];
 std::set<USHORT> heldInputs;
 
 CRITICAL_SECTION inputQueueLock;
 CRITICAL_SECTION keybindsLock;
+
 bool enableRightClick;
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LARGE_INTEGER time;
 	PlayerButton inputType;
@@ -78,12 +82,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		case RIM_TYPEKEYBOARD: {
 			USHORT vkey = raw->data.keyboard.VKey;
 			inputState = raw->data.keyboard.Flags & RI_KEY_BREAK;
+
+			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
 				if (!inputState) return 0;
 				else heldInputs.erase(vkey);
 			}
 			
-			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			bool shouldEmplace = true;
 			player = Player1;
 
@@ -183,15 +188,18 @@ void inputThread() {
 
 std::queue<struct inputEvent> inputQueueCopy;
 std::queue<struct step> stepQueue;
+
 inputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
+
 LARGE_INTEGER lastFrameTime;
 LARGE_INTEGER lastPhysicsFrameTime;
 LARGE_INTEGER currentFrameTime;
-int inputQueueSize;
+
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
 bool lateCutoff;
+
 void updateInputQueueAndTime(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
 	if (!playLayer || GameManager::sharedState()->getEditorLayer() || playLayer->m_player1->m_isDead) {
@@ -207,6 +215,7 @@ void updateInputQueueAndTime(int stepCount) {
 
 		// queryperformancecounter is done within the critical section to prevent a race condition which could cause dropped inputs
 		EnterCriticalSection(&inputQueueLock);
+
 		if (lateCutoff) {
 			QueryPerformanceCounter(&currentFrameTime);
 			inputQueueCopy = inputQueue;
@@ -218,6 +227,7 @@ void updateInputQueueAndTime(int stepCount) {
 				inputQueue.pop();
 			}
 		}
+
 		LeaveCriticalSection(&inputQueueLock);
 
 		lastPhysicsFrameTime = currentFrameTime;
@@ -336,7 +346,6 @@ class $modify(CCDirector) {
 	}
 };
 
-int stepCount;
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
 		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
@@ -354,7 +363,7 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarpDivisor = std::max(pl->m_gameState.m_timeWarp, 1.0f);
-			stepCount = ((modifiedDelta * 60.0) / timewarpDivisor) * 4; // not sure if this is different from (delta * 240) / timewarpDivisor
+			const int stepCount = ((modifiedDelta * 60.0) / timewarpDivisor) * 4; // not sure if this is different from (delta * 240) / timewarpDivisor
 
 			if (stepCount > 0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
