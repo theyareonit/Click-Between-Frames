@@ -392,6 +392,12 @@ $on_mod(Loaded) {
 		return;
 	}
 
-	//Mod::get()->patch(reinterpret_cast<void*>(geode::base::get() + 0x2de530), {0x3d, 0x0a, 0x57, 0x3f});
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
+	DWORD oldProtect;
+	DWORD newProtect = 0x40;
+	VirtualProtect(addr, 4, newProtect, &oldProtect);
+	Mod::get()->patch(addr, { 0x3d, 0x0a, 0x57, 0x3f });
+	VirtualProtect(addr, 4, oldProtect, &newProtect);
+
 	std::thread(inputThread).detach();
 }
