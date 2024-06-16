@@ -312,10 +312,10 @@ class $modify(CCDirector) {
 			firstFrame = true;
 			skipUpdate = true;
 			enableInput = true;
-			/*std::queue<struct inputEvent>().swap(inputQueueCopy);
+			std::queue<struct inputEvent>().swap(inputQueueCopy);
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
-			LeaveCriticalSection(&inputQueueLock);*/
+			LeaveCriticalSection(&inputQueueLock);
 		}
 		CCDirector::setDeltaTime(dTime);
 	}
