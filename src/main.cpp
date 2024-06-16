@@ -216,7 +216,6 @@ void updateInputQueueAndTime(int stepCount) {
 		LeaveCriticalSection(&inputQueueLock);
 		lastPhysicsFrameTime = currentFrameTime;
 
-		// on the first frame after entering a level, stepDelta is 0. if you do PlayerObject::update(0) at any point, the player will permanently freeze
 		if (!firstFrame) skipUpdate = false;
 		else {
 			skipUpdate = true;
@@ -313,10 +312,10 @@ class $modify(CCDirector) {
 			firstFrame = true;
 			skipUpdate = true;
 			enableInput = true;
-			std::queue<struct inputEvent>().swap(inputQueueCopy);
+			/*std::queue<struct inputEvent>().swap(inputQueueCopy);
 			EnterCriticalSection(&inputQueueLock);
 			std::queue<struct inputEvent>().swap(inputQueue);
-			LeaveCriticalSection(&inputQueueLock);
+			LeaveCriticalSection(&inputQueueLock);*/
 		}
 		CCDirector::setDeltaTime(dTime);
 	}

@@ -38,7 +38,7 @@
 			"name": "Late Input Cutoff",
 			"description": "Slightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
 			"type": "bool",
-			"default": true
+			"default": false
 		}
 	},
 	"repository": "https://github.com/theyareonit/Click-Between-Frames"
