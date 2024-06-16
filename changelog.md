@@ -1,3 +1,7 @@
+# v1.1.1
+
+* it turns out the physics stuff wasnt actually fixed im just pushing this version to let you all know that that was a LIE and i just got (un)lucky while testing
+
 # v1.1.0
 
 * Update to 2.206

@@ -300,14 +300,19 @@ void updateKeybinds() {
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
 	for (int i = 0; i < v.size(); i++) inputBinds[p1Jump].emplace(v[i]->getHash());
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
 	for (int i = 0; i < v.size(); i++) inputBinds[p1Left].emplace(v[i]->getHash());
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
 	for (int i = 0; i < v.size(); i++) inputBinds[p1Right].emplace(v[i]->getHash());
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
 	for (int i = 0; i < v.size(); i++) inputBinds[p2Jump].emplace(v[i]->getHash());
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
 	for (int i = 0; i < v.size(); i++) inputBinds[p2Left].emplace(v[i]->getHash());
+
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
 	for (int i = 0; i < v.size(); i++) inputBinds[p2Right].emplace(v[i]->getHash());
 
