@@ -62,6 +62,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	PlayerButton inputType;
 	bool inputState;
 	bool player;
+
+	QueryPerformanceCounter(&time);
 	
 	LPVOID pData;
 	switch (uMsg) {
@@ -140,8 +142,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	default:
 		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 	}
-
-	QueryPerformanceCounter(&time);
 
 	EnterCriticalSection(&inputQueueLock);
 	inputQueue.emplace(inputEvent{ time, inputType, inputState, player });
@@ -327,7 +327,6 @@ class $modify(PlayLayer) {
 	}
 };
 
-
 class $modify(CCDirector) {
 	void setDeltaTime(float dTime) {
 		PlayLayer* playLayer = PlayLayer::get();
@@ -421,12 +420,12 @@ class $modify(PlayerObject) {
 };
 
 $on_mod(Loaded) {
-	if (!InitializeCriticalSectionAndSpinCount(&inputQueueLock, 0x00004000)) {
+	if (!InitializeCriticalSectionAndSpinCount(&inputQueueLock, 0x00040000)) {
 		log::error("Failed to initialize input queue lock");
 		return;
 	}
 
-	if (!InitializeCriticalSectionAndSpinCount(&keybindsLock, 0x00004000)) {
+	if (!InitializeCriticalSectionAndSpinCount(&keybindsLock, 0x00040000)) {
 		log::error("Failed to initialize keybind lock");
 		return;
 	}
