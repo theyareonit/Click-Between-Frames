@@ -338,10 +338,10 @@ class $modify(CCDirector) {
 
 		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 
-		if (softToggle || 
-			!playLayer || 
-			!(par = playLayer->getParent()) || 
-			(getChildOfType<PauseLayer>(par, 0) != nullptr)) 
+		if (softToggle 
+			|| !playLayer 
+			|| !(par = playLayer->getParent()) 
+			|| (getChildOfType<PauseLayer>(par, 0) != nullptr)) 
 		{
 			firstFrame = true;
 			skipUpdate = true;
@@ -389,9 +389,9 @@ class $modify(PlayerObject) {
 	void update(float timeFactor) {
 		PlayLayer* pl = PlayLayer::get();
 
-		if (skipUpdate ||
-			!pl ||
-			!(this == pl->m_player1 || this == pl->m_player2)) // future proofing for mods like globed etc that might have more than 2 players
+		if (skipUpdate 
+			|| !pl 
+			|| !(this == pl->m_player1 || this == pl->m_player2)) // future proofing for mods like globed etc that might have more than 2 players
 		{
 			PlayerObject::update(timeFactor);
 			return;
