@@ -3,7 +3,7 @@
 	"gd": {
 		"win": "2.206"
 	},
-	"version": "v1.1.2",
+	"version": "v1.1.3",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -30,13 +30,19 @@
 	"settings": {
 		"right-click": {
 			"name": "Right Click P2",
-			"description": "Use right click for player 2 jump",
+			"description": "Use right click for player 2 jump.",
 			"type": "bool",
 			"default": false
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
 			"description": "Slightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
+			"type": "bool",
+			"default": false
+		},
+		"soft-toggle": {
+			"name": "Disable Mod",
+			"description": "Disable the mod's functionality without needing to restart GD. The mod may still have unintended effects with this checked, so be careful.",
 			"type": "bool",
 			"default": false
 		}

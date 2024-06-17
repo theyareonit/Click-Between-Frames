@@ -1,6 +1,11 @@
+# v1.1.3
+
+* Add toggle to disable the mod without needing to restart GD
+* Slightly improve input precision
+
 # v1.1.2
 
-* fix platformer & buffer click physics for real this time (i hope)
+* Fix platformer & buffer click physics for real this time (I hope)
 
 # v1.1.1
 

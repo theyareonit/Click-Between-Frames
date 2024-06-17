@@ -3,11 +3,14 @@
 #include <limits>
 
 #include <Geode/Geode.hpp>
+#include <Geode/loader/SettingEvent.hpp>
+
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 //#include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
+
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 
 using namespace geode::prelude;
@@ -327,6 +330,8 @@ class $modify(PlayLayer) {
 	}
 };
 
+bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+
 class $modify(CCDirector) {
 	void setDeltaTime(float dTime) {
 		PlayLayer* playLayer = PlayLayer::get();
@@ -334,7 +339,7 @@ class $modify(CCDirector) {
 
 		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 
-		if (!playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
+		if (softToggle || !playLayer || !(par = playLayer->getParent()) || (getChildOfType<PauseLayer>(par, 0) != nullptr)) {
 			firstFrame = true;
 			skipUpdate = true;
 			enableInput = true;
@@ -419,6 +424,25 @@ class $modify(PlayerObject) {
 	}
 };
 
+Patch *patch;
+
+void toggleMod(bool disable) {
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
+	DWORD oldProtect;
+	DWORD newProtect = 0x40;
+	
+	VirtualProtect(addr, 4, newProtect, &oldProtect);
+
+	if (!patch) patch = Mod::get()->patch(addr, { 0x3d, 0x0a, 0x57, 0x3f }).unwrap();
+
+	if (disable) patch->disable();
+	else patch->enable();
+	
+	VirtualProtect(addr, 4, oldProtect, &newProtect);
+
+	softToggle = disable;
+}
+
 $on_mod(Loaded) {
 	if (!InitializeCriticalSectionAndSpinCount(&inputQueueLock, 0x00040000)) {
 		log::error("Failed to initialize input queue lock");
@@ -430,13 +454,8 @@ $on_mod(Loaded) {
 		return;
 	}
 
-	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
-	DWORD oldProtect;
-	DWORD newProtect = 0x40;
-
-	VirtualProtect(addr, 4, newProtect, &oldProtect);
-	Mod::get()->patch(addr, { 0x3d, 0x0a, 0x57, 0x3f });
-	VirtualProtect(addr, 4, oldProtect, &newProtect);
+	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
+	listenForSettingChanges("soft-toggle", toggleMod);
 
 	std::thread(inputThread).detach();
 }
