@@ -1,6 +1,7 @@
 # v1.1.5
 
-* Improve input precision again
+* Future proof for physics bypass
+* Fix buffer clicks for the final time.......
 
 # v1.1.4
 
