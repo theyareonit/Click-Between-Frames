@@ -423,7 +423,7 @@ class $modify(PlayerObject) {
 			if (step.endStep) break;
 
 			this->m_isOnGround = p1OnGround;
-			if (isDual) pl->m_player2->m_isOnGround = true;
+			if (isDual) pl->m_player2->m_isOnGround = p2OnGround;
 
 			step = updateDeltaFactorAndInput();
 		}
