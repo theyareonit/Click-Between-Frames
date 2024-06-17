@@ -204,7 +204,10 @@ bool lateCutoff;
 
 void updateInputQueueAndTime(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
-	if (!playLayer || GameManager::sharedState()->getEditorLayer() || playLayer->m_player1->m_isDead) {
+	if (!playLayer 
+		|| GameManager::sharedState()->getEditorLayer() 
+		|| playLayer->m_player1->m_isDead) 
+	{
 		enableInput = true;
 		firstFrame = true;
 		skipUpdate = true;
