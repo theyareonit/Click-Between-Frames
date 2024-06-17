@@ -394,7 +394,7 @@ class $modify(PlayerObject) {
 
 		if (skipUpdate 
 			|| !pl 
-			|| !(this == pl->m_player1 || this == pl->m_player2)) // future proofing for mods like globed etc that might have more than 2 players
+			|| !(this == pl->m_player1 || this == pl->m_player2))
 		{
 			PlayerObject::update(timeFactor);
 			return;
@@ -402,9 +402,10 @@ class $modify(PlayerObject) {
 
 		if (this == pl->m_player2) return;
 
-		
-		bool p1StartedOnGround = this->m_isOnGround; // this gets set to false if you run PlayerObject::update without doing a collision check, so we need to save its state
+		bool p1StartedOnGround = this->m_isOnGround;
 		bool p2StartedOnGround = pl->m_player2->m_isOnGround;
+		bool p1TouchingOrb = this->m_touchingRings->count();
+		bool p2TouchingOrb = pl->m_player2->m_touchingRings->count();
 		bool p1IsFlying = (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
 		bool p2IsFlying = (pl->m_player2->m_isDart || pl->m_player2->m_isBird || pl->m_player2->m_isShip || pl->m_player2->m_isSwing);
 
@@ -416,12 +417,12 @@ class $modify(PlayerObject) {
 		while (true) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
-			if (p1StartedOnGround || p1IsFlying) PlayerObject::update(newTimeFactor);
+			if (p1StartedOnGround || p1IsFlying || p1TouchingOrb) PlayerObject::update(newTimeFactor);
 			else if (step.endStep) PlayerObject::update(timeFactor);
 
 			if (isDual) {
 				skipUpdate = true; // re-enable PlayerObject::update() for player 2
-				if (p2StartedOnGround || p2IsFlying) pl->m_player2->update(newTimeFactor);
+				if (p2StartedOnGround || p2IsFlying || p2TouchingOrb) pl->m_player2->update(newTimeFactor);
 				else if (step.endStep) pl->m_player2->update(timeFactor);
 				skipUpdate = false;
 			}
@@ -430,11 +431,11 @@ class $modify(PlayerObject) {
 
 			if (firstLoop) {
 				this->m_isOnGround = p1StartedOnGround;
-				if (isDual) pl->m_player2->m_isOnGround = p2StartedOnGround;
+				pl->m_player2->m_isOnGround = p2StartedOnGround;
 			}
 			else {
 				this->m_isOnGround = false;
-				if (isDual) pl->m_player2->m_isOnGround = false;
+				pl->m_player2->m_isOnGround = false;
 			}
 
 			firstLoop = false;
