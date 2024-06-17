@@ -378,9 +378,9 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarpDivisor = std::max(pl->m_gameState.m_timeWarp, 1.0f);
-			const int stepCount = ((modifiedDelta * 60.0) / timewarpDivisor) * 4; // not sure if this is different from (delta * 240) / timewarpDivisor
+			const int stepCount = std::max(1.0, ((modifiedDelta * 60.0) / timewarpDivisor) * 4); // not sure if this is different from (delta * 240) / timewarpDivisor
 
-			if (stepCount > 0) updateInputQueueAndTime(stepCount);
+			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
 		}
 		

@@ -1,3 +1,7 @@
+# v1.1.5
+
+* Improve input precision again
+
 # v1.1.4
 
 * fix duals oops
