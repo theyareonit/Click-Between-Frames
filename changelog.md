@@ -1,3 +1,7 @@
+# v1.1.4
+
+* fix duals oops
+
 # v1.1.3
 
 * Add toggle to disable the mod without needing to restart GD
