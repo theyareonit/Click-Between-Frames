@@ -18,6 +18,5 @@ Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 - This mod does not work with bots
 - Lock to player X will desync after clicking
 - Controller input is not yet supported
-- Moving platforms are buggy in platformer mode
 
 Icon by alex/sincos.

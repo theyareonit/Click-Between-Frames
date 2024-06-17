@@ -380,18 +380,28 @@ class $modify(GJBaseGameLayer) {
 
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
-		if (skipUpdate) {
+		PlayLayer* pl = PlayLayer::get();
+
+		if (skipUpdate ||
+			!pl ||
+			!(this == pl->m_player1 || this == pl->m_player2) // future proofing for mods like globed etc that might have more than 2 players
+			) {
 			PlayerObject::update(timeFactor);
 			return;
 		}
 
-		PlayLayer* pl = PlayLayer::get();
 		if (this == pl->m_player2) return;
 
 		step step = updateDeltaFactorAndInput();
 		bool isDual = pl->m_gameState.m_isDualMode;
+		bool p1OnGround;
+		bool p2OnGround;
+
 		while (true) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
+
+			p1OnGround = this->m_isOnGround; // this gets set to false if you run PlayerObject::update without doing a collision check, so we need to save its state
+			if (isDual) p2OnGround = pl->m_player2->m_isOnGround;
 
 			PlayerObject::update(newTimeFactor);
 			if (isDual) {
@@ -402,8 +412,8 @@ class $modify(PlayerObject) {
 
 			if (step.endStep) break;
 
-			pl->checkCollisions(this, newTimeFactor, true); // true = ignore damage
-			if (isDual) pl->checkCollisions(pl->m_player2, newTimeFactor, true);
+			this->m_isOnGround = p1OnGround;
+			if (isDual) pl->m_player2->m_isOnGround = true;
 
 			step = updateDeltaFactorAndInput();
 		}
