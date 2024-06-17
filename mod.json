@@ -42,7 +42,7 @@
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
-			"description": "Slightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
+			"description": "Check for inputs near the end of the frame instead of the start. \nSlightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
 			"type": "bool",
 			"default": false
 		}
