@@ -1,3 +1,8 @@
+# v1.1.6
+
+* Added a Physics Bypass equivalent ("Unlock Delta" in the mod settings) because I didn't want to wait for MH Geode 2.206
+* Made step calculation formula closer to vanilla to fix some edge cases
+
 # v1.1.5
 
 * Future proof for physics bypass

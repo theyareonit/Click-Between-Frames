@@ -13,6 +13,8 @@ Other FPS values will have worse input precision without Physics Bypass, due to 
 
 Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 
+The mod comes with its own version of Physics Bypass in the mod options called "Unlock Delta". Be warned that not all lists or leaderboards that allow CBF will consider this legit!
+
 # Known issues
 
 - This mod does not work with bots

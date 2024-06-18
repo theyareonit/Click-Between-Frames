@@ -327,7 +327,6 @@ void updateKeybinds() {
 class $modify(PlayLayer) {
 	bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects) {
 		updateKeybinds();
-		lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
 		return PlayLayer::init(level, useReplay, dontCreateObjects);
 	}
 };
@@ -361,9 +360,12 @@ class $modify(CCDirector) {
 	}
 };
 
+bool actualDelta;
+
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
 		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
+		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MAX - 1);
 	}
 
 	void handleButton(bool down, int button, bool isPlayer1) {
@@ -373,12 +375,13 @@ class $modify(GJBaseGameLayer) {
 	}
 
 	float getModifiedDelta(float delta) {
-		const float modifiedDelta = GJBaseGameLayer::getModifiedDelta(delta);
+		float modifiedDelta = GJBaseGameLayer::getModifiedDelta(delta);
+		if (actualDelta && !softToggle) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime();
 
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarpDivisor = std::max(pl->m_gameState.m_timeWarp, 1.0f);
-			const int stepCount = std::max(1.0, ((modifiedDelta * 60.0) / timewarpDivisor) * 4); // not sure if this is different from (delta * 240) / timewarpDivisor
+			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarpDivisor)) * 4)); // not sure if this is different from (delta * 240) / timewarpDivisor
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
@@ -418,7 +421,7 @@ class $modify(PlayerObject) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
 			if (p1StartedOnGround || p1IsFlying || p1TouchingOrb) PlayerObject::update(newTimeFactor);
-			else if (step.endStep) PlayerObject::update(timeFactor);
+			else if (step.endStep) PlayerObject::update(timeFactor); // disable cbf for buffers, revert to click-on-steps mode
 
 			if (isDual) {
 				skipUpdate = true; // re-enable PlayerObject::update() for player 2
@@ -476,6 +479,16 @@ $on_mod(Loaded) {
 
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
+
+	lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
+	listenForSettingChanges("late-cutoff", +[](bool enable) {
+		lateCutoff = enable;
+	});
+
+	actualDelta = Mod::get()->getSettingValue<bool>("actual-delta");
+	listenForSettingChanges("actual-delta", +[](bool enable) {
+		actualDelta = enable;
+	});
 
 	std::thread(inputThread).detach();
 }

@@ -3,7 +3,7 @@
 	"gd": {
 		"win": "2.206"
 	},
-	"version": "v1.1.5",
+	"version": "v1.1.6",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -42,7 +42,13 @@
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
-			"description": "Check for inputs near the end of the frame instead of the start. \nSlightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
+			"description": "Check for inputs near the end of the frame instead of the start. \n\nSlightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
+			"type": "bool",
+			"default": false
+		},
+		"actual-delta": {
+			"name": "Unlock Delta",
+			"description": "Replacement for Physics Bypass. Reduces stuttering on some FPS values. \"Disable mod\" must be unchecked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false
 		}
