@@ -22,7 +22,7 @@ The mod comes with its own version of Physics Bypass in the mod options. Be warn
 # Known issues
 
 - This mod does not work with bots
-- Lock to player X will desync after clicking
 - Controller input is not yet supported
+- Numpad input is not yet supported
 
 Icon by alex/sincos.

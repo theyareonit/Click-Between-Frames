@@ -9,6 +9,7 @@
 #include <Geode/modify/CCDirector.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/EndLevelLayer.hpp>
 
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 
@@ -380,11 +381,13 @@ class $modify(GJBaseGameLayer) {
 
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
-			const float timewarpDivisor = std::max(pl->m_gameState.m_timeWarp, 1.0f);
-			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarpDivisor)) * 4)); // not sure if this is different from (delta * 240) / timewarpDivisor
+			const float timewarp = pl->m_gameState.m_timeWarp;
+			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarpDivisor
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
+
+			if (actualDelta) modifiedDelta *= timewarp;
 		}
 		
 		return modifiedDelta;
@@ -416,6 +419,8 @@ class $modify(PlayerObject) {
 		bool firstLoop = true;
 
 		step step = updateDeltaFactorAndInput();
+		CCPoint p1Pos = PlayerObject::getPosition();
+		CCPoint p2Pos = pl->m_player2->getPosition();
 
 		while (true) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
@@ -430,7 +435,11 @@ class $modify(PlayerObject) {
 				skipUpdate = false;
 			}
 
-			if (step.endStep) break;
+			if (step.endStep) {
+				this->m_lastPosition = p1Pos;
+				pl->m_player2->m_lastPosition = p2Pos;
+				break;
+			}
 
 			if (firstLoop) {
 				this->m_isOnGround = p1StartedOnGround;
@@ -447,6 +456,26 @@ class $modify(PlayerObject) {
 	}
 };
 
+class $modify(EndLevelLayer) {
+	void customSetup() {
+		EndLevelLayer::customSetup();
+
+		if (!softToggle) {
+			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
+			CCLabelBMFont *indicator = CCLabelBMFont::create("CBF", "bigFont.fnt");
+
+			if (actualDelta) indicator->setString("CBF+PB");
+
+			indicator->setPosition({ size.width, size.height });
+			indicator->setAnchorPoint({ 1.0f, 1.0f });
+			indicator->setOpacity(90);
+			indicator->setScale(0.2f);
+
+			this->addChild(indicator);
+		}
+	}
+};
+
 Patch *patch;
 
 void toggleMod(bool disable) {
@@ -456,7 +485,7 @@ void toggleMod(bool disable) {
 	
 	VirtualProtect(addr, 4, newProtect, &oldProtect);
 
-	if (!patch) patch = Mod::get()->patch(addr, { 0x3d, 0x0a, 0x57, 0x3f }).unwrap();
+	if (!patch) patch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
 
 	if (disable) patch->disable();
 	else patch->enable();

@@ -1,3 +1,9 @@
+# v1.1.8
+
+* Fix Lock to Player X desync
+* Add indicator to endscreen
+* Fix timewarp
+
 # v1.1.7
 
 * Change getModifiedDelta hook priority for better compatibility with other mods
