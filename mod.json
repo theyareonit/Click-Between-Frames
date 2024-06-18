@@ -47,8 +47,8 @@
 			"default": false
 		},
 		"actual-delta": {
-			"name": "Unlock Delta",
-			"description": "Replacement for Physics Bypass. Reduces stuttering on some FPS values. \"Disable mod\" must be unchecked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"name": "Physics Bypass",
+			"description": "Reduces stuttering on some FPS values. \"Disable mod\" must be unchecked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false
 		}
