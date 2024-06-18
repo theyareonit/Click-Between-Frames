@@ -1,3 +1,7 @@
+# v1.1.7
+
+* Change getModifiedDelta hook priority for better compatibility with other mods
+
 # v1.1.6
 
 * Added a Physics Bypass equivalent because I didn't want to wait for MH Geode 2.206

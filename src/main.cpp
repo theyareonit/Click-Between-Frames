@@ -365,7 +365,7 @@ bool actualDelta;
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto & self) {
 		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
-		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MAX - 1);
+		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MIN);
 	}
 
 	void handleButton(bool down, int button, bool isPlayer1) {
