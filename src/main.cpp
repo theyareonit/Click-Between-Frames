@@ -377,17 +377,16 @@ class $modify(GJBaseGameLayer) {
 
 	float getModifiedDelta(float delta) {
 		float modifiedDelta = GJBaseGameLayer::getModifiedDelta(delta);
-		if (actualDelta && !softToggle) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime();
 
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
+			if (actualDelta && !softToggle) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			
 			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
-
-			if (actualDelta && !softToggle) modifiedDelta *= timewarp;
 		}
 		
 		return modifiedDelta;
