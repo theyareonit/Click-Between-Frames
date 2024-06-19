@@ -382,12 +382,12 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarpDivisor
+			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
 
-			if (actualDelta) modifiedDelta *= timewarp;
+			if (actualDelta && !softToggle) modifiedDelta *= timewarp;
 		}
 		
 		return modifiedDelta;
@@ -408,48 +408,61 @@ class $modify(PlayerObject) {
 
 		if (this == pl->m_player2) return;
 
-		bool p1StartedOnGround = this->m_isOnGround;
-		bool p2StartedOnGround = pl->m_player2->m_isOnGround;
-		bool p1TouchingOrb = this->m_touchingRings->count();
-		bool p2TouchingOrb = pl->m_player2->m_touchingRings->count();
-		bool p1IsFlying = (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
-		bool p2IsFlying = (pl->m_player2->m_isDart || pl->m_player2->m_isBird || pl->m_player2->m_isShip || pl->m_player2->m_isSwing);
+		PlayerObject* p2 = pl->m_player2;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
+		bool isPlatformer = this->m_isPlatformer;
 		bool firstLoop = true;
+
+		bool p1StartedOnGround = this->m_isOnGround;
+		bool p2StartedOnGround = p2->m_isOnGround;
+
+		bool p1NotBuffering = p1StartedOnGround
+			|| this->m_touchingRings->count()
+			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
+
+		bool p2NotBuffering = p2StartedOnGround
+			|| p2->m_touchingRings->count()
+			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
 		step step = updateDeltaFactorAndInput();
 		CCPoint p1Pos = PlayerObject::getPosition();
-		CCPoint p2Pos = pl->m_player2->getPosition();
+		CCPoint p2Pos = p2->getPosition();
 
 		while (true) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
-			if (p1StartedOnGround || p1IsFlying || p1TouchingOrb) PlayerObject::update(newTimeFactor);
+			if (p1NotBuffering) PlayerObject::update(newTimeFactor);
 			else if (step.endStep) PlayerObject::update(timeFactor); // disable cbf for buffers, revert to click-on-steps mode
 
 			if (isDual) {
-				skipUpdate = true; // re-enable PlayerObject::update() for player 2
-				if (p2StartedOnGround || p2IsFlying || p2TouchingOrb) pl->m_player2->update(newTimeFactor);
-				else if (step.endStep) pl->m_player2->update(timeFactor);
+				skipUpdate = true;
+				if (p2NotBuffering) p2->update(newTimeFactor);
+				else if (step.endStep) p2->update(timeFactor);
 				skipUpdate = false;
 			}
 
 			if (step.endStep) {
 				this->m_lastPosition = p1Pos;
-				pl->m_player2->m_lastPosition = p2Pos;
+				p2->m_lastPosition = p2Pos;
 				break;
 			}
 
-			if (firstLoop) {
-				this->m_isOnGround = p1StartedOnGround;
-				pl->m_player2->m_isOnGround = p2StartedOnGround;
+			if (isPlatformer) { // kinda a scuffed temporary fix, platformer might feel a little off until i find a better way to do this
+				if (firstLoop) {
+					this->m_isOnGround = p1StartedOnGround;
+					p2->m_isOnGround = p2StartedOnGround;
+				}
+				else {
+					this->m_isOnGround = false;
+					p2->m_isOnGround = false;
+				}
 			}
 			else {
-				this->m_isOnGround = false;
-				pl->m_player2->m_isOnGround = false;
+				if (p1NotBuffering) pl->checkCollisions(this, newTimeFactor, false);
+				if (isDual && p2NotBuffering) pl->checkCollisions(p2, newTimeFactor, false);
 			}
-
+			
 			firstLoop = false;
 			step = updateDeltaFactorAndInput();
 		}

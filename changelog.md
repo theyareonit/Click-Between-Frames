@@ -1,3 +1,8 @@
+# v1.1.9
+
+* Fix D-blocks & maybe some other collision issues for non-platformer mode
+* Fix a bug involving timewarp & physics bypass when the mod is disabled
+
 # v1.1.8
 
 * Fix Lock to Player X desync
