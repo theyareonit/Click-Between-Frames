@@ -393,6 +393,9 @@ class $modify(GJBaseGameLayer) {
 	}
 };
 
+CCPoint p1Pos = { NULL, NULL };
+CCPoint p2Pos = { NULL, NULL };
+
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
 		PlayLayer* pl = PlayLayer::get();
@@ -425,8 +428,9 @@ class $modify(PlayerObject) {
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
 		step step = updateDeltaFactorAndInput();
-		CCPoint p1Pos = PlayerObject::getPosition();
-		CCPoint p2Pos = p2->getPosition();
+
+		p1Pos = PlayerObject::getPosition();
+		p2Pos = p2->getPosition();
 
 		while (true) {
 			const float newTimeFactor = timeFactor * step.deltaFactor;
@@ -441,11 +445,7 @@ class $modify(PlayerObject) {
 				skipUpdate = false;
 			}
 
-			if (step.endStep) {
-				this->m_lastPosition = p1Pos;
-				p2->m_lastPosition = p2Pos;
-				break;
-			}
+			if (step.endStep) break;
 
 			if (isPlatformer) { // kinda a scuffed temporary fix, platformer might feel a little off until i find a better way to do this
 				if (firstLoop) {
@@ -465,6 +465,22 @@ class $modify(PlayerObject) {
 			firstLoop = false;
 			step = updateDeltaFactorAndInput();
 		}
+	}
+
+	void updateRotation(float t) {
+		PlayLayer* pl = PlayLayer::get();
+		if (pl && this == pl->m_player1) {
+			if (p1Pos.x) {
+				this->m_lastPosition = p1Pos;
+				p1Pos.setPoint(NULL, NULL);
+			}
+			if (p2Pos.x) {
+				pl->m_player2->m_lastPosition = p2Pos;
+				p2Pos.setPoint(NULL, NULL);
+			}
+		}
+
+		PlayerObject::updateRotation(t);
 	}
 };
 

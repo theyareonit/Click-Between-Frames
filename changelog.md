@@ -1,3 +1,7 @@
+# v1.1.11
+
+* Fix spider
+
 # v1.1.10
 
 * Fix timewarp again
