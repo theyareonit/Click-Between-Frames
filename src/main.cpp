@@ -381,7 +381,7 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (actualDelta && !softToggle) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (actualDelta) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 			
 			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
@@ -472,11 +472,15 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		if (!softToggle) {
-			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
-			CCLabelBMFont *indicator = CCLabelBMFont::create("CBF", "bigFont.fnt");
+		std::string text;
 
-			if (actualDelta) indicator->setString("CBF+PB");
+		if (softToggle && actualDelta) text = "PB";
+		else if (actualDelta) text = "CBF+PB";
+		else text = "CBF";
+
+		if (!softToggle || actualDelta) {
+			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
+			CCLabelBMFont *indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
 
 			indicator->setPosition({ size.width, size.height });
 			indicator->setAnchorPoint({ 1.0f, 1.0f });

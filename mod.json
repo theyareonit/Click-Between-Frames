@@ -3,7 +3,7 @@
 	"gd": {
 		"win": "2.206"
 	},
-	"version": "v1.1.9",
+	"version": "v1.1.10",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -29,8 +29,8 @@
 	],
 	"settings": {
 		"soft-toggle": {
-			"name": "Disable Mod",
-			"description": "Disable the mod's functionality without needing to restart GD. The mod may still have unintended effects with this checked, so be careful.",
+			"name": "Disable CBF",
+			"description": "Disable CBF without needing to restart GD. This option does not disable physics bypass if you have it enabled!",
 			"type": "bool",
 			"default": false
 		},
@@ -48,7 +48,7 @@
 		},
 		"actual-delta": {
 			"name": "Physics Bypass",
-			"description": "Reduces stuttering on some FPS values. \"Disable mod\" must be unchecked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false
 		}

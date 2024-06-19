@@ -1,3 +1,8 @@
+# v1.1.10
+
+* Fix timewarp again
+* Allow Physics Bypass even with Disable CBF checked
+
 # v1.1.9
 
 * Fix D-blocks & maybe some other collision issues for non-platformer mode
