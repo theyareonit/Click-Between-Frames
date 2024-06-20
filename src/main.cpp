@@ -458,8 +458,8 @@ class $modify(PlayerObject) {
 				}
 			}
 			else {
-				if (p1NotBuffering) pl->checkCollisions(this, newTimeFactor, false);
-				if (isDual && p2NotBuffering) pl->checkCollisions(p2, newTimeFactor, false);
+				if (p1NotBuffering) pl->checkCollisions(this, newTimeFactor, true);
+				if (isDual && p2NotBuffering) pl->checkCollisions(p2, newTimeFactor, true);
 			}
 			
 			firstLoop = false;

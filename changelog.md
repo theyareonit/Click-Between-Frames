@@ -1,3 +1,7 @@
+# v1.1.12
+
+* Fix ignore damage
+
 # v1.1.11
 
 * Fix spider
