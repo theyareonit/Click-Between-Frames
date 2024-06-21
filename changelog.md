@@ -1,3 +1,7 @@
+# v1.1.13
+
+* Improve collision & rotation
+
 # v1.1.12
 
 * Fix ignore damage

@@ -219,11 +219,10 @@ void updateInputQueueAndTime(int stepCount) {
 		lastFrameTime = lastPhysicsFrameTime;
 		std::queue<struct step>().swap(stepQueue); // just in case
 
-		// queryperformancecounter is done within the critical section to prevent a race condition which could cause dropped inputs
 		EnterCriticalSection(&inputQueueLock);
 
 		if (lateCutoff) {
-			QueryPerformanceCounter(&currentFrameTime);
+			QueryPerformanceCounter(&currentFrameTime); // done within the critical section to prevent a race condition which could cause dropped inputs
 			inputQueueCopy = inputQueue;
 			std::queue<struct inputEvent>().swap(inputQueue);
 		}
@@ -274,6 +273,9 @@ void updateInputQueueAndTime(int stepCount) {
 	}
 }
 
+bool enableP1CollisionAndRotation = true;
+bool enableP2CollisionAndRotation = true;
+
 step updateDeltaFactorAndInput() {
 	enableInput = false;
 
@@ -283,7 +285,7 @@ step updateDeltaFactorAndInput() {
 	double deltaFactor = front.deltaFactor;
 
 	if (nextInput.time.QuadPart != 0) {
-		PlayLayer *playLayer = PlayLayer::get();
+		PlayLayer* playLayer = PlayLayer::get();
 
 		enableInput = true;
 		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, !nextInput.player);
@@ -292,6 +294,11 @@ step updateDeltaFactorAndInput() {
 
 	nextInput = front.input;
 	stepQueue.pop();
+
+	if (nextInput.time.QuadPart != 0) {
+		enableP1CollisionAndRotation = false;
+		enableP2CollisionAndRotation = false;
+	}
 
 	return front;
 }
@@ -361,6 +368,8 @@ class $modify(CCDirector) {
 	}
 };
 
+int lastP1CollisionCheck = 0;
+int lastP2CollisionCheck = 0;
 bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
@@ -370,9 +379,7 @@ class $modify(GJBaseGameLayer) {
 	}
 
 	void handleButton(bool down, int button, bool isPlayer1) {
-		if (enableInput) {
-			GJBaseGameLayer::handleButton(down, button, isPlayer1);
-		}
+		if (enableInput) GJBaseGameLayer::handleButton(down, button, isPlayer1);
 	}
 
 	float getModifiedDelta(float delta) {
@@ -390,6 +397,18 @@ class $modify(GJBaseGameLayer) {
 		}
 		
 		return modifiedDelta;
+	}
+
+	int checkCollisions(PlayerObject *p, float t, bool d) {
+		if (p == this->m_player1) {
+			if (enableP1CollisionAndRotation || skipUpdate) lastP1CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
+			return lastP1CollisionCheck;
+		}
+		else if (p == this->m_player2) {
+			if (enableP2CollisionAndRotation || skipUpdate) lastP2CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
+			return lastP2CollisionCheck;
+		}
+		else return GJBaseGameLayer::checkCollisions(p, t, d);
 	}
 };
 
@@ -427,60 +446,83 @@ class $modify(PlayerObject) {
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
-		step step = updateDeltaFactorAndInput();
+		enableP1CollisionAndRotation = true;
+		enableP2CollisionAndRotation = true;
+		skipUpdate = true; // enable collision & rotation checks for the duration of the step update-collision-rotation loop
 
 		p1Pos = PlayerObject::getPosition();
 		p2Pos = p2->getPosition();
 
-		while (true) {
+		step step;
+
+		do {
+			step = updateDeltaFactorAndInput();
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
-			if (p1NotBuffering) PlayerObject::update(newTimeFactor);
-			else if (step.endStep) PlayerObject::update(timeFactor); // disable cbf for buffers, revert to click-on-steps mode
+			if (p1NotBuffering) {
+				PlayerObject::update(newTimeFactor);
+				if (!isPlatformer && !enableP1CollisionAndRotation) {
+					pl->checkCollisions(this, newTimeFactor, true);
+					PlayerObject::updateRotation(newTimeFactor);
+				}
+				else if (isPlatformer) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
+					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
+					else this->m_isOnGround = false;
+
+					enableP1CollisionAndRotation = true;
+				}
+			}
+			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
+				PlayerObject::update(timeFactor);
+				enableP1CollisionAndRotation = true;
+			}
 
 			if (isDual) {
-				skipUpdate = true;
-				if (p2NotBuffering) p2->update(newTimeFactor);
-				else if (step.endStep) p2->update(timeFactor);
-				skipUpdate = false;
+				if (p2NotBuffering) {
+					p2->update(newTimeFactor);
+					if (!isPlatformer && !enableP2CollisionAndRotation) {
+						pl->checkCollisions(p2, newTimeFactor, true);
+						p2->updateRotation(newTimeFactor);
+					}
+					else if (isPlatformer) {
+						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
+						else p2->m_isOnGround = false;
+
+						enableP2CollisionAndRotation = true;
+					}
+				}
+				else if (step.endStep) {
+					p2->update(timeFactor);
+					enableP2CollisionAndRotation = true;
+				}
 			}
 
-			if (step.endStep) break;
-
-			if (isPlatformer) { // kinda a scuffed temporary fix, platformer might feel a little off until i find a better way to do this
-				if (firstLoop) {
-					this->m_isOnGround = p1StartedOnGround;
-					p2->m_isOnGround = p2StartedOnGround;
-				}
-				else {
-					this->m_isOnGround = false;
-					p2->m_isOnGround = false;
-				}
-			}
-			else {
-				if (p1NotBuffering) pl->checkCollisions(this, newTimeFactor, true);
-				if (isDual && p2NotBuffering) pl->checkCollisions(p2, newTimeFactor, true);
-			}
-			
 			firstLoop = false;
-			step = updateDeltaFactorAndInput();
-		}
+
+		} while (!step.endStep);
+
+		skipUpdate = false;
 	}
 
 	void updateRotation(float t) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl && this == pl->m_player1) {
-			if (p1Pos.x) {
+			if (enableP1CollisionAndRotation || skipUpdate) PlayerObject::updateRotation(t);
+
+			if (p1Pos.x && !skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = p1Pos;
 				p1Pos.setPoint(NULL, NULL);
 			}
-			if (p2Pos.x) {
+		}
+		else if (pl && this == pl->m_player2) {
+			if (enableP2CollisionAndRotation || skipUpdate) PlayerObject::updateRotation(t);
+
+			if (p2Pos.x && !skipUpdate) {
 				pl->m_player2->m_lastPosition = p2Pos;
 				p2Pos.setPoint(NULL, NULL);
 			}
 		}
-
-		PlayerObject::updateRotation(t);
+		else PlayerObject::updateRotation(t);
 	}
 };
 
@@ -488,13 +530,13 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		std::string text;
-
-		if (softToggle && actualDelta) text = "PB";
-		else if (actualDelta) text = "CBF+PB";
-		else text = "CBF";
-
 		if (!softToggle || actualDelta) {
+			std::string text;
+
+			if (softToggle && actualDelta) text = "PB";
+			else if (actualDelta) text = "CBF+PB";
+			else text = "CBF";
+
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
 			CCLabelBMFont *indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
 
