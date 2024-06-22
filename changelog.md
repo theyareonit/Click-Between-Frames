@@ -1,3 +1,7 @@
+# v1.1.14
+
+* Fix platformer because I accidentally broke it in v1.1.13
+
 # v1.1.13
 
 * Improve collision & rotation
