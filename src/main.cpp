@@ -465,7 +465,7 @@ class $modify(PlayerObject) {
 					pl->checkCollisions(this, newTimeFactor, true);
 					PlayerObject::updateRotation(newTimeFactor);
 				}
-				else if (isPlatformer) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
+				else if (isPlatformer && !firstLoop) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
 					else this->m_isOnGround = false;
 
@@ -484,7 +484,7 @@ class $modify(PlayerObject) {
 						pl->checkCollisions(p2, newTimeFactor, true);
 						p2->updateRotation(newTimeFactor);
 					}
-					else if (isPlatformer) {
+					else if (isPlatformer && !firstLoop) {
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
 						else p2->m_isOnGround = false;
 
