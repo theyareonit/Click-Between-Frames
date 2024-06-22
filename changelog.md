@@ -1,3 +1,7 @@
+# v1.1.15
+
+* fix platformer again cuz im the troller of the century
+
 # v1.1.14
 
 * Fix platformer because I accidentally broke it in v1.1.13

@@ -52,8 +52,8 @@ const step emptyStep = step{ emptyInput, 1.0, true };
 
 std::queue<struct inputEvent> inputQueue;
 
-std::set<size_t> inputBinds[6];
-std::set<USHORT> heldInputs;
+std::unordered_set<size_t> inputBinds[6];
+std::unordered_set<USHORT> heldInputs;
 
 CRITICAL_SECTION inputQueueLock;
 CRITICAL_SECTION keybindsLock;
@@ -465,7 +465,7 @@ class $modify(PlayerObject) {
 					pl->checkCollisions(this, newTimeFactor, true);
 					PlayerObject::updateRotation(newTimeFactor);
 				}
-				else if (isPlatformer && !firstLoop) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
+				else if (isPlatformer && step.deltaFactor != 1.0) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
 					else this->m_isOnGround = false;
 
@@ -484,7 +484,7 @@ class $modify(PlayerObject) {
 						pl->checkCollisions(p2, newTimeFactor, true);
 						p2->updateRotation(newTimeFactor);
 					}
-					else if (isPlatformer && !firstLoop) {
+					else if (isPlatformer && step.deltaFactor != 1.0) {
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
 						else p2->m_isOnGround = false;
 
