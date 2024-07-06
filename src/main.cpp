@@ -88,6 +88,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			USHORT vkey = raw->data.keyboard.VKey;
 			inputState = raw->data.keyboard.Flags & RI_KEY_BREAK;
 
+			if (vkey >= VK_NUMPAD0 && vkey <= VK_NUMPAD9) vkey -= 0x30; // make numpad numbers work with customkeybinds
+
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
 				if (!inputState) return 0;
@@ -273,9 +275,6 @@ void updateInputQueueAndTime(int stepCount) {
 	}
 }
 
-bool enableP1CollisionAndRotation = true;
-bool enableP2CollisionAndRotation = true;
-
 step updateDeltaFactorAndInput() {
 	enableInput = false;
 
@@ -294,11 +293,6 @@ step updateDeltaFactorAndInput() {
 
 	nextInput = front.input;
 	stepQueue.pop();
-
-	if (nextInput.time.QuadPart != 0) {
-		enableP1CollisionAndRotation = false;
-		enableP2CollisionAndRotation = false;
-	}
 
 	return front;
 }
@@ -332,8 +326,17 @@ void updateKeybinds() {
 	LeaveCriticalSection(&keybindsLock);
 }
 
+void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
+	(*(CCDictionary**)((char*)p + 0x5b0))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5b8))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5c0))->removeAllObjects();
+	(*(CCDictionary**)((char*)p + 0x5c8))->removeAllObjects();
+	*(unsigned long*)((char*)p + 0x5e0) = *(unsigned long*)((char*)p + 0x5d0);
+	*(long long*)((char*)p + 0x5d0) = -1;
+}
+
 class $modify(PlayLayer) {
-	bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects) {
+	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
 		updateKeybinds();
 		return PlayLayer::init(level, useReplay, dontCreateObjects);
 	}
@@ -368,8 +371,8 @@ class $modify(CCDirector) {
 	}
 };
 
-int lastP1CollisionCheck = 0;
-int lastP2CollisionCheck = 0;
+float p1CollisionDelta;
+float p2CollisionDelta;
 bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
@@ -399,14 +402,12 @@ class $modify(GJBaseGameLayer) {
 		return modifiedDelta;
 	}
 
-	int checkCollisions(PlayerObject *p, float t, bool d) {
-		if (p == this->m_player1) {
-			if (enableP1CollisionAndRotation || skipUpdate) lastP1CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
-			return lastP1CollisionCheck;
+	int checkCollisions(PlayerObject* p, float t, bool d) {
+		if (!skipUpdate && p == this->m_player1) {
+			return GJBaseGameLayer::checkCollisions(p, p1CollisionDelta, d);
 		}
-		else if (p == this->m_player2) {
-			if (enableP2CollisionAndRotation || skipUpdate) lastP2CollisionCheck = GJBaseGameLayer::checkCollisions(p, t, d);
-			return lastP2CollisionCheck;
+		else if (!skipUpdate && p == this->m_player2) {
+			return GJBaseGameLayer::checkCollisions(p, p2CollisionDelta, d);
 		}
 		else return GJBaseGameLayer::checkCollisions(p, t, d);
 	}
@@ -414,9 +415,12 @@ class $modify(GJBaseGameLayer) {
 
 CCPoint p1Pos = { NULL, NULL };
 CCPoint p2Pos = { NULL, NULL };
+float p1RotationDelta;
+float p2RotationDelta;
 
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
+
 		PlayLayer* pl = PlayLayer::get();
 
 		if (skipUpdate 
@@ -427,9 +431,8 @@ class $modify(PlayerObject) {
 			return;
 		}
 
-		if (this == pl->m_player2) return;
-
 		PlayerObject* p2 = pl->m_player2;
+		if (this == p2) return;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
 		bool isPlatformer = this->m_isPlatformer;
@@ -446,9 +449,8 @@ class $modify(PlayerObject) {
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
-		enableP1CollisionAndRotation = true;
-		enableP2CollisionAndRotation = true;
-		skipUpdate = true; // enable collision & rotation checks for the duration of the step update-collision-rotation loop
+		p1CollisionDelta = timeFactor;
+		p2CollisionDelta = timeFactor;
 
 		p1Pos = PlayerObject::getPosition();
 		p2Pos = p2->getPosition();
@@ -459,63 +461,64 @@ class $modify(PlayerObject) {
 			step = updateDeltaFactorAndInput();
 			const float newTimeFactor = timeFactor * step.deltaFactor;
 
+			p1RotationDelta = newTimeFactor;
+			p2RotationDelta = newTimeFactor;
+
 			if (p1NotBuffering) {
 				PlayerObject::update(newTimeFactor);
-				if (!isPlatformer && !enableP1CollisionAndRotation) {
-					pl->checkCollisions(this, newTimeFactor, true);
-					PlayerObject::updateRotation(newTimeFactor);
+				if (this->m_isDart && !step.endStep) {
+					p1CollisionDelta = newTimeFactor;
+					pl->checkCollisions(this, newTimeFactor, true); // only passing newTimeFactor for compatibility with other mods
+					newResetCollisionLog(this);
 				}
-				else if (isPlatformer && step.deltaFactor != 1.0) {  // checking collision extra times in platformer breaks moving platforms so this is a scuffed temporary fix
+				else if (step.deltaFactor != 1.0) {  // checking collision extra times seems to break moving platforms but is necessary for d blocks in wave
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround;
 					else this->m_isOnGround = false;
-
-					enableP1CollisionAndRotation = true;
 				}
+
+				if (!step.endStep) PlayerObject::updateRotation(newTimeFactor);
 			}
 			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
 				PlayerObject::update(timeFactor);
-				enableP1CollisionAndRotation = true;
 			}
 
 			if (isDual) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
-					if (!isPlatformer && !enableP2CollisionAndRotation) {
+					if (p2->m_isDart && !step.endStep) {
+						p2CollisionDelta = newTimeFactor;
 						pl->checkCollisions(p2, newTimeFactor, true);
-						p2->updateRotation(newTimeFactor);
+						newResetCollisionLog(p2);
 					}
-					else if (isPlatformer && step.deltaFactor != 1.0) {
+					else if (step.deltaFactor != 1.0) {
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
 						else p2->m_isOnGround = false;
-
-						enableP2CollisionAndRotation = true;
 					}
+
+					if (!step.endStep) p2->updateRotation(newTimeFactor);
 				}
 				else if (step.endStep) {
 					p2->update(timeFactor);
-					enableP2CollisionAndRotation = true;
 				}
 			}
 
 			firstLoop = false;
 
 		} while (!step.endStep);
-
-		skipUpdate = false;
 	}
 
 	void updateRotation(float t) {
 		PlayLayer* pl = PlayLayer::get();
-		if (pl && this == pl->m_player1) {
-			if (enableP1CollisionAndRotation || skipUpdate) PlayerObject::updateRotation(t);
+		if (!skipUpdate && pl && this == pl->m_player1) {
+			PlayerObject::updateRotation(p1RotationDelta);
 
 			if (p1Pos.x && !skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = p1Pos;
 				p1Pos.setPoint(NULL, NULL);
 			}
 		}
-		else if (pl && this == pl->m_player2) {
-			if (enableP2CollisionAndRotation || skipUpdate) PlayerObject::updateRotation(t);
+		else if (!skipUpdate && pl && this == pl->m_player2) {
+			PlayerObject::updateRotation(p2RotationDelta);
 
 			if (p2Pos.x && !skipUpdate) {
 				pl->m_player2->m_lastPosition = p2Pos;
@@ -538,11 +541,11 @@ class $modify(EndLevelLayer) {
 			else text = "CBF";
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
-			CCLabelBMFont *indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
+			CCLabelBMFont* indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
 
 			indicator->setPosition({ size.width, size.height });
 			indicator->setAnchorPoint({ 1.0f, 1.0f });
-			indicator->setOpacity(90);
+			indicator->setOpacity(30);
 			indicator->setScale(0.2f);
 
 			this->addChild(indicator);
@@ -550,7 +553,7 @@ class $modify(EndLevelLayer) {
 	}
 };
 
-Patch *patch;
+Patch* patch;
 
 void toggleMod(bool disable) {
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);

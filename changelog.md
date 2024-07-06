@@ -1,3 +1,10 @@
+# v1.1.16
+
+* Fix various velocity bugs caused by moving platforms
+* Fix collision bug involving moving D-block platforms in wave
+* Fix numpad numbers (requires num lock to be enabled!)
+* Reduce indicator opacity
+
 # v1.1.15
 
 * fix platformer again cuz im the troller of the century

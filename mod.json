@@ -1,9 +1,9 @@
 {
-	"geode": "3.0.0",
+	"geode": "3.1.1",
 	"gd": {
 		"win": "2.206"
 	},
-	"version": "v1.1.15",
+	"version": "v1.1.16",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",

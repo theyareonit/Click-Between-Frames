@@ -13,7 +13,7 @@ To edit keybinds, go to the GD options menu and click the "Keys" button in the t
 To enable right click input, use the mod options menu.
 
 It is recommended to use either Physics Bypass or one of these FPS values: 60, 80, 120, or 240.
-This is because 2.2 stutters on FPS values that aren't factors of 240 unless you have Physics Bypass.
+This is because 2.2 stutters on FPS values that aren't factors of 240 unless you enable Physics Bypass.
 
 Disable TPS Bypass/Draw Divide when using this mod, because they're pointless.
 
@@ -23,6 +23,5 @@ The mod comes with its own version of Physics Bypass in the mod options. Be warn
 
 - This mod does not work with bots
 - Controller input is not yet supported
-- Numpad input is not yet supported
 
 Icon by alex/sincos.
