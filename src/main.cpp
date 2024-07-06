@@ -417,6 +417,7 @@ CCPoint p1Pos = { NULL, NULL };
 CCPoint p2Pos = { NULL, NULL };
 float p1RotationDelta;
 float p2RotationDelta;
+bool midStep = false;
 
 class $modify(PlayerObject) {
 	void update(float timeFactor) {
@@ -456,6 +457,7 @@ class $modify(PlayerObject) {
 		p2Pos = p2->getPosition();
 
 		step step;
+		midStep = true;
 
 		do {
 			step = updateDeltaFactorAndInput();
@@ -505,6 +507,8 @@ class $modify(PlayerObject) {
 			firstLoop = false;
 
 		} while (!step.endStep);
+
+		midStep = false;
 	}
 
 	void updateRotation(float t) {
@@ -512,7 +516,7 @@ class $modify(PlayerObject) {
 		if (!skipUpdate && pl && this == pl->m_player1) {
 			PlayerObject::updateRotation(p1RotationDelta);
 
-			if (p1Pos.x && !skipUpdate) { // to happen only when GJBGL::update() calls updateRotation after an input
+			if (p1Pos.x && !midStep) { // to happen only when GJBGL::update() calls updateRotation after an input
 				this->m_lastPosition = p1Pos;
 				p1Pos.setPoint(NULL, NULL);
 			}
@@ -520,7 +524,7 @@ class $modify(PlayerObject) {
 		else if (!skipUpdate && pl && this == pl->m_player2) {
 			PlayerObject::updateRotation(p2RotationDelta);
 
-			if (p2Pos.x && !skipUpdate) {
+			if (p2Pos.x && !midStep) {
 				pl->m_player2->m_lastPosition = p2Pos;
 				p2Pos.setPoint(NULL, NULL);
 			}

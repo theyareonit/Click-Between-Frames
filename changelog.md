@@ -1,3 +1,7 @@
+# v1.1.17
+
+* fix lock to player x again oops
+
 # v1.1.16
 
 * Fix various velocity bugs caused by moving platforms
