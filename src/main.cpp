@@ -34,23 +34,23 @@ enum State : bool {
 	Release = 1
 };
 
-struct inputEvent {
+struct InputEvent {
 	LARGE_INTEGER time;
 	PlayerButton inputType;
 	bool inputState;
 	bool player;
 };
 
-struct step {
-	inputEvent input;
+struct Step {
+	InputEvent input;
 	double deltaFactor;
 	bool endStep;
 };
 
-const inputEvent emptyInput = inputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
-const step emptyStep = step{ emptyInput, 1.0, true };
+const InputEvent emptyInput = InputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
+const Step emptyStep = Step{ emptyInput, 1.0, true };
 
-std::queue<struct inputEvent> inputQueue;
+std::queue<struct InputEvent> inputQueue;
 
 std::unordered_set<size_t> inputBinds[6];
 std::unordered_set<USHORT> heldInputs;
@@ -148,8 +148,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 	}
 
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
 	EnterCriticalSection(&inputQueueLock);
-	inputQueue.emplace(inputEvent{ time, inputType, inputState, player });
+	inputQueue.emplace(InputEvent{ time, inputType, inputState, player });
 	LeaveCriticalSection(&inputQueueLock);
 
 	return 0;
@@ -191,10 +193,10 @@ void inputThread() {
 	}
 }
 
-std::queue<struct inputEvent> inputQueueCopy;
-std::queue<struct step> stepQueue;
+std::queue<struct InputEvent> inputQueueCopy;
+std::queue<struct Step> stepQueue;
 
-inputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
+InputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
 
 LARGE_INTEGER lastFrameTime;
 LARGE_INTEGER lastPhysicsFrameTime;
@@ -219,14 +221,14 @@ void updateInputQueueAndTime(int stepCount) {
 	else {
 		nextInput = emptyInput;
 		lastFrameTime = lastPhysicsFrameTime;
-		std::queue<struct step>().swap(stepQueue); // just in case
+		std::queue<struct Step>().swap(stepQueue); // just in case
 
 		EnterCriticalSection(&inputQueueLock);
 
 		if (lateCutoff) {
 			QueryPerformanceCounter(&currentFrameTime); // done within the critical section to prevent a race condition which could cause dropped inputs
 			inputQueueCopy = inputQueue;
-			std::queue<struct inputEvent>().swap(inputQueue);
+			std::queue<struct InputEvent>().swap(inputQueue);
 		}
 		else {
 			while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
@@ -243,7 +245,7 @@ void updateInputQueueAndTime(int stepCount) {
 		else {
 			skipUpdate = true;
 			firstFrame = false;
-			if (!lateCutoff) std::queue<struct inputEvent>().swap(inputQueueCopy);
+			if (!lateCutoff) std::queue<struct InputEvent>().swap(inputQueueCopy);
 			return;
 		}
 
@@ -256,31 +258,31 @@ void updateInputQueueAndTime(int stepCount) {
 		for (int i = 0; i < stepCount; i++) {
 			double lastDFactor = 0.0;
 			while (true) {
-				inputEvent front;
+				InputEvent front;
 				if (!inputQueueCopy.empty()) {
 					front = inputQueueCopy.front();
 					if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
 						double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-						stepQueue.emplace(step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0), false });
+						stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0), false });
 						lastDFactor = dFactor;
 						inputQueueCopy.pop();
 						continue;
 					}
 				}
 				front = nextInput;
-				stepQueue.emplace(step{ front, std::max(smallestFloat, 1.0 - lastDFactor), true });
+				stepQueue.emplace(Step{ front, std::max(smallestFloat, 1.0 - lastDFactor), true });
 				break;
 			}
 		}
 	}
 }
 
-step updateDeltaFactorAndInput() {
+Step updateDeltaFactorAndInput() {
 	enableInput = false;
 
 	if (stepQueue.empty()) return emptyStep;
 
-	step front = stepQueue.front();
+	Step front = stepQueue.front();
 	double deltaFactor = front.deltaFactor;
 
 	if (nextInput.time.QuadPart != 0) {
@@ -360,10 +362,10 @@ class $modify(CCDirector) {
 			skipUpdate = true;
 			enableInput = true;
 
-			std::queue<struct inputEvent>().swap(inputQueueCopy);
+			std::queue<struct InputEvent>().swap(inputQueueCopy);
 
 			EnterCriticalSection(&inputQueueLock);
-			std::queue<struct inputEvent>().swap(inputQueue);
+			std::queue<struct InputEvent>().swap(inputQueue);
 			LeaveCriticalSection(&inputQueueLock);
 		}
 
@@ -456,7 +458,7 @@ class $modify(PlayerObject) {
 		p1Pos = PlayerObject::getPosition();
 		p2Pos = p2->getPosition();
 
-		step step;
+		Step step;
 		midStep = true;
 
 		do {
