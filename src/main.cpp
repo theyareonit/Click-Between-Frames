@@ -148,8 +148,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 	}
 
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-
 	EnterCriticalSection(&inputQueueLock);
 	inputQueue.emplace(InputEvent{ time, inputType, inputState, player });
 	LeaveCriticalSection(&inputQueueLock);
@@ -186,6 +184,8 @@ void inputThread() {
 		log::error("Failed to register raw input devices");
 		return;
 	}
+
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
 	MSG msg;
 	while (GetMessage(&msg, hwnd, 0, 0)) {
