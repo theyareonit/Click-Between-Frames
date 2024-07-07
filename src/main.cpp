@@ -378,7 +378,7 @@ float p2CollisionDelta;
 bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
-	static void onModify(auto & self) {
+	static void onModify(auto& self) {
 		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
 		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MIN);
 	}
@@ -426,18 +426,15 @@ class $modify(PlayerObject) {
 		PlayerObject* p2 = pl->m_player2;
 		if (this == p2) return;
 
-		bool isDual = pl->m_gameState.m_isDualMode;
-
-		bool p1StartedOnGround = this->m_isOnGround;
-		bool p2StartedOnGround = p2->m_isOnGround;
-
-		bool p1NotBuffering = p1StartedOnGround
+		bool p1NotBuffering = this->m_isOnGround
 			|| this->m_touchingRings->count()
 			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
 
-		bool p2NotBuffering = p2StartedOnGround
+		bool p2NotBuffering = p2->m_isOnGround
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
+
+		bool isDual = pl->m_gameState.m_isDualMode;
 
 		p1Pos = PlayerObject::getPosition();
 		p2Pos = p2->getPosition();
@@ -456,9 +453,9 @@ class $modify(PlayerObject) {
 				if (!step.endStep) {
 					p1CollisionDelta = newTimeFactor;
 					pl->checkCollisions(this, 0.0f, true);
+					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
-				if (!step.endStep) PlayerObject::updateRotation(newTimeFactor);
 			}
 			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
 				PlayerObject::update(timeFactor);
@@ -470,9 +467,9 @@ class $modify(PlayerObject) {
 					if (!step.endStep) {
 						p2CollisionDelta = newTimeFactor;
 						pl->checkCollisions(p2, 0.0f, true);
+						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
-					if (!step.endStep) p2->updateRotation(newTimeFactor);
 				}
 				else if (step.endStep) {
 					p2->update(timeFactor);
