@@ -1,3 +1,7 @@
+# v1.1.18
+
+* Fix orb void clicks
+
 # v1.1.17
 
 * fix lock to player x again oops
