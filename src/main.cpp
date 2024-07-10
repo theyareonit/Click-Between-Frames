@@ -193,6 +193,8 @@ void inputThread() {
 	}
 }
 
+constexpr double smallestFloat = std::numeric_limits<float>::min();
+
 std::queue<struct InputEvent> inputQueueCopy;
 std::queue<struct Step> stepQueue;
 
@@ -254,7 +256,6 @@ void updateInputQueueAndTime(int stepCount) {
 		deltaTime.QuadPart = currentFrameTime.QuadPart - lastFrameTime.QuadPart;
 		stepDelta.QuadPart = (deltaTime.QuadPart / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
 
-		constexpr double smallestFloat = std::numeric_limits<float>::min(); // ensures deltaFactor can never be 0, even after being converted to float
 		for (int i = 0; i < stepCount; i++) {
 			double lastDFactor = 0.0;
 			while (true) {
@@ -407,6 +408,7 @@ class $modify(GJBaseGameLayer) {
 
 CCPoint p1Pos = { NULL, NULL };
 CCPoint p2Pos = { NULL, NULL };
+
 float rotationDelta;
 bool midStep = false;
 
@@ -426,20 +428,24 @@ class $modify(PlayerObject) {
 		PlayerObject* p2 = pl->m_player2;
 		if (this == p2) return;
 
-		bool p1NotBuffering = this->m_isOnGround
+		bool isDual = pl->m_gameState.m_isDualMode;
+
+		bool p1StartedOnGround = this->m_isOnGround;
+		bool p2StartedOnGround = p2->m_isOnGround;
+
+		bool p1NotBuffering = p1StartedOnGround
 			|| this->m_touchingRings->count()
 			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
 
-		bool p2NotBuffering = p2->m_isOnGround
+		bool p2NotBuffering = p2StartedOnGround
 			|| p2->m_touchingRings->count()
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
-
-		bool isDual = pl->m_gameState.m_isDualMode;
 
 		p1Pos = PlayerObject::getPosition();
 		p2Pos = p2->getPosition();
 
 		Step step;
+		bool firstLoop = true;
 		midStep = true;
 
 		do {
@@ -452,7 +458,9 @@ class $modify(PlayerObject) {
 				PlayerObject::update(newTimeFactor);
 				if (!step.endStep) {
 					p1CollisionDelta = newTimeFactor;
-					pl->checkCollisions(this, 0.0f, true);
+					if (firstLoop) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
+					if (!this->m_isOnSlope) pl->checkCollisions(this, 0.0f, true);
+					else pl->checkCollisions(this, 0.01f, true); // troll
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -466,7 +474,9 @@ class $modify(PlayerObject) {
 					p2->update(newTimeFactor);
 					if (!step.endStep) {
 						p2CollisionDelta = newTimeFactor;
-						pl->checkCollisions(p2, 0.0f, true);
+						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
+						if (!p2->m_isOnSlope) pl->checkCollisions(p2, 0.0f, true);
+						else pl->checkCollisions(p2, 0.01f, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
@@ -476,6 +486,7 @@ class $modify(PlayerObject) {
 				}
 			}
 
+			firstLoop = false;
 		} while (!step.endStep);
 
 		midStep = false;

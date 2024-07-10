@@ -1,3 +1,8 @@
+# v1.1.19
+
+* Fix delayed inputs on blocks moving downward
+* Possibly fix velocity on slopes moving downward (needs further testing)
+
 # v1.1.18
 
 * Fix orb void clicks
