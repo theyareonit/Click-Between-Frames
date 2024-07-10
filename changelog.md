@@ -1,3 +1,7 @@
+# v1.1.20
+
+* bandaid fix for upward slopes cuz whatever
+
 # v1.1.19
 
 * Fix delayed inputs on blocks moving downward

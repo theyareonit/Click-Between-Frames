@@ -374,8 +374,6 @@ class $modify(CCDirector) {
 	}
 };
 
-float p1CollisionDelta;
-float p2CollisionDelta;
 bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
@@ -457,10 +455,8 @@ class $modify(PlayerObject) {
 			if (p1NotBuffering) {
 				PlayerObject::update(newTimeFactor);
 				if (!step.endStep) {
-					p1CollisionDelta = newTimeFactor;
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope) pl->checkCollisions(this, 0.0f, true);
-					else pl->checkCollisions(this, 0.01f, true); // troll
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -473,10 +469,8 @@ class $modify(PlayerObject) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
 					if (!step.endStep) {
-						p2CollisionDelta = newTimeFactor;
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope) pl->checkCollisions(p2, 0.0f, true);
-						else pl->checkCollisions(p2, 0.01f, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
