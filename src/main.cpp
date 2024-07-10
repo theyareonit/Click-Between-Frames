@@ -456,7 +456,7 @@ class $modify(PlayerObject) {
 				PlayerObject::update(newTimeFactor);
 				if (!step.endStep) {
 					if (firstLoop) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
-					if (!this->m_isOnSlope) pl->checkCollisions(this, 0.0f, true);
+					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -470,7 +470,7 @@ class $modify(PlayerObject) {
 					p2->update(newTimeFactor);
 					if (!step.endStep) {
 						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
-						if (!p2->m_isOnSlope) pl->checkCollisions(p2, 0.0f, true);
+						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
