@@ -159,10 +159,10 @@ void inputThread() {
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
-	wc.lpszClassName = "Click Between Frames";
+	wc.lpszClassName = "CBF";
 
 	RegisterClass(&wc);
-	HWND hwnd = CreateWindow("Click Between Frames", "Raw Input Window", 0, 0, 0, 0, 0, HWND_MESSAGE, 0, wc.hInstance, 0);
+	HWND hwnd = CreateWindow("CBF", "Raw Input Window", 0, 0, 0, 0, 0, HWND_MESSAGE, 0, wc.hInstance, 0);
 	if (!hwnd) {
 		const DWORD err = GetLastError();
 		log::error("Failed to create raw input window: {}", err);
@@ -171,12 +171,12 @@ void inputThread() {
 
 	RAWINPUTDEVICE dev[2];
 	dev[0].usUsagePage = 0x01;        // generic desktop controls
-	dev[0].usUsage = 0x06;            // keyboard
+	dev[0].usUsage = 0x02;            // mouse
 	dev[0].dwFlags = RIDEV_INPUTSINK; // allow inputs without being in the foreground
 	dev[0].hwndTarget = hwnd;         // raw input window
 
 	dev[1].usUsagePage = 0x01;
-	dev[1].usUsage = 0x02;            // mouse
+	dev[1].usUsage = 0x06;            // keyboard
 	dev[1].dwFlags = RIDEV_INPUTSINK;
 	dev[1].hwndTarget = hwnd;
 
@@ -455,7 +455,7 @@ class $modify(PlayerObject) {
 			if (p1NotBuffering) {
 				PlayerObject::update(newTimeFactor);
 				if (!step.endStep) {
-					if (firstLoop) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
+					if (firstLoop && (this->m_yVelocity < 0 ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
@@ -469,7 +469,7 @@ class $modify(PlayerObject) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
 					if (!step.endStep) {
-						if (firstLoop) p2->m_isOnGround = p2StartedOnGround;
+						if (firstLoop && (p2->m_yVelocity < 0 ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);

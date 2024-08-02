@@ -1,3 +1,8 @@
+# v1.1.21
+
+* Fix an exploit that could allow you to double jump
+* 
+
 # v1.1.20
 
 * bandaid fix for upward slopes cuz whatever
