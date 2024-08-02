@@ -155,7 +155,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 
+bool threadPriority;
+
 void inputThread() {
+
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
@@ -185,7 +188,7 @@ void inputThread() {
 		return;
 	}
 
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
 	MSG msg;
 	while (GetMessage(&msg, hwnd, 0, 0)) {
@@ -574,6 +577,8 @@ $on_mod(Loaded) {
 	listenForSettingChanges("actual-delta", +[](bool enable) {
 		actualDelta = enable;
 	});
+
+	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
 
 	std::thread(inputThread).detach();
 }

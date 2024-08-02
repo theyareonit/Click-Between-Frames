@@ -51,6 +51,12 @@
 			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false
+		},
+		"thread-priority": {
+			"name": "Thread Priority",
+			"description": "Whether to automatically set CBF's thread priority to the highest available. \n\nRequires game restart to apply.",
+			"type": "bool",
+			"default": true
 		}
 	},
 	"repository": "https://github.com/theyareonit/Click-Between-Frames"

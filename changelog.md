@@ -1,7 +1,7 @@
 # v1.1.21
 
 * Fix an exploit that could allow you to double jump
-* 
+* Add thread priority option
 
 # v1.1.20
 
