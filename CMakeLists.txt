@@ -8,6 +8,7 @@ project(ClickBetweenFrames VERSION 1.0.0)
 
 add_library(${PROJECT_NAME} SHARED
     "src/main.cpp"
+    "src/input.cpp"
  )
 
 if (NOT DEFINED ENV{GEODE_SDK})
