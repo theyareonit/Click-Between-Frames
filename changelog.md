@@ -1,3 +1,7 @@
+# v1.1.22
+
+* Potentially improve performance
+
 # v1.1.21
 
 * Fix an exploit that could allow you to double jump

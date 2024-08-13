@@ -1,7 +1,5 @@
 #include "includes.hpp"
 
-#include <queue>
-#include <algorithm>
 #include <limits>
 
 #include <Geode/Geode.hpp>
@@ -48,23 +46,23 @@ void updateInputQueueAndTime(int stepCount) {
 	else {
 		nextInput = emptyInput;
 		lastFrameTime = lastPhysicsFrameTime;
-		std::queue<struct Step>().swap(stepQueue); // just in case
+		stepQueue = {}; // just in case
 
-		EnterCriticalSection(&inputQueueLock);
+		{
+			std::lock_guard lock(inputQueueLock);
 
-		if (lateCutoff) {
-			QueryPerformanceCounter(&currentFrameTime); // done within the critical section to prevent a race condition which could cause dropped inputs
-			inputQueueCopy = inputQueue;
-			std::queue<struct InputEvent>().swap(inputQueue);
-		}
-		else {
-			while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
-				inputQueueCopy.push(inputQueue.front());
-				inputQueue.pop();
+			if (lateCutoff) {
+				QueryPerformanceCounter(&currentFrameTime);
+				inputQueueCopy = inputQueue;
+				inputQueue = {};
+			}
+			else {
+				while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
+					inputQueueCopy.push(inputQueue.front());
+					inputQueue.pop();
+				}
 			}
 		}
-
-		LeaveCriticalSection(&inputQueueLock);
 
 		lastPhysicsFrameTime = currentFrameTime;
 
@@ -72,7 +70,7 @@ void updateInputQueueAndTime(int stepCount) {
 		else {
 			skipUpdate = true;
 			firstFrame = false;
-			if (!lateCutoff) std::queue<struct InputEvent>().swap(inputQueueCopy);
+			if (!lateCutoff) inputQueueCopy = {};
 			return;
 		}
 
@@ -126,32 +124,33 @@ Step updateDeltaFactorAndInput() {
 }
 
 void updateKeybinds() {
+	std::array<std::unordered_set<size_t>, 6> binds;
 	std::vector<geode::Ref<keybinds::Bind>> v;
 
-	EnterCriticalSection(&keybindsLock);
-
-	enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
-	inputBinds->clear();
+	enableRightClick.store(Mod::get()->getSettingValue<bool>("right-click"));
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
-	for (int i = 0; i < v.size(); i++) inputBinds[p1Jump].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(v[i]->getHash());
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
-	for (int i = 0; i < v.size(); i++) inputBinds[p1Left].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(v[i]->getHash());
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
-	for (int i = 0; i < v.size(); i++) inputBinds[p1Right].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(v[i]->getHash());
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
-	for (int i = 0; i < v.size(); i++) inputBinds[p2Jump].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(v[i]->getHash());
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
-	for (int i = 0; i < v.size(); i++) inputBinds[p2Left].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(v[i]->getHash());
 
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
-	for (int i = 0; i < v.size(); i++) inputBinds[p2Right].emplace(v[i]->getHash());
+	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
 
-	LeaveCriticalSection(&keybindsLock);
+	{
+		std::lock_guard lock(keybindsLock);
+		inputBinds = binds;
+	}
 }
 
 void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
@@ -188,11 +187,12 @@ class $modify(CCDirector) {
 			skipUpdate = true;
 			enableInput = true;
 
-			std::queue<struct InputEvent>().swap(inputQueueCopy);
+			inputQueueCopy = {};
 
-			EnterCriticalSection(&inputQueueLock);
-			std::queue<struct InputEvent>().swap(inputQueue);
-			LeaveCriticalSection(&inputQueueLock);
+			{
+				std::lock_guard lock(inputQueueLock);
+				inputQueue = {};
+			}
 		}
 
 		CCDirector::setDeltaTime(dTime);
@@ -377,16 +377,6 @@ void toggleMod(bool disable) {
 }
 
 $on_mod(Loaded) {
-	if (!InitializeCriticalSectionAndSpinCount(&inputQueueLock, 0x00040000)) {
-		log::error("Failed to initialize input queue lock");
-		return;
-	}
-
-	if (!InitializeCriticalSectionAndSpinCount(&keybindsLock, 0x00040000)) {
-		log::error("Failed to initialize keybind lock");
-		return;
-	}
-
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
 

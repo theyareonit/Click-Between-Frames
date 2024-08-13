@@ -2,13 +2,13 @@
 
 std::queue<struct InputEvent> inputQueue;
 
-std::unordered_set<size_t> inputBinds[6];
+std::array<std::unordered_set<size_t>, 6> inputBinds;
 std::unordered_set<USHORT> heldInputs;
 
-CRITICAL_SECTION inputQueueLock;
-CRITICAL_SECTION keybindsLock;
+std::mutex inputQueueLock;
+std::mutex keybindsLock;
 
-bool enableRightClick;
+std::atomic<bool> enableRightClick;
 bool threadPriority;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -50,40 +50,40 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			bool shouldEmplace = true;
 			player = Player1;
 
-			EnterCriticalSection(&keybindsLock);
+			std::array<std::unordered_set<size_t>, 6> binds;
+			{
+				std::lock_guard lock(keybindsLock);
+				binds = inputBinds;
+			}
 
-			if (inputBinds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
-			else if (inputBinds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
-			else if (inputBinds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
+			if (binds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
+			else if (binds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
+			else if (binds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
 			else {
 				player = Player2;
-				if (inputBinds[p2Jump].contains(vkey)) inputType = PlayerButton::Jump;
-				else if (inputBinds[p2Left].contains(vkey)) inputType = PlayerButton::Left;
-				else if (inputBinds[p2Right].contains(vkey)) inputType = PlayerButton::Right;
+				if (binds[p2Jump].contains(vkey)) inputType = PlayerButton::Jump;
+				else if (binds[p2Left].contains(vkey)) inputType = PlayerButton::Left;
+				else if (binds[p2Right].contains(vkey)) inputType = PlayerButton::Right;
 				else shouldEmplace = false;
 			}
+
 			if (!inputState) heldInputs.emplace(vkey);
+			if (!shouldEmplace) return 0;
 
-			LeaveCriticalSection(&keybindsLock);
-
-			if (!shouldEmplace) return 0; // has to be done outside of the critical section
 			break;
 		}
 		case RIM_TYPEMOUSE: {
 			USHORT flags = raw->data.mouse.usButtonFlags;
 			bool shouldEmplace = true;
+
 			player = Player1;
 			inputType = PlayerButton::Jump;
-
-			EnterCriticalSection(&keybindsLock);
-			bool rc = enableRightClick;
-			LeaveCriticalSection(&keybindsLock);
 
 			if (flags & RI_MOUSE_BUTTON_1_DOWN) inputState = Press;
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
 				player = Player2;
-				if (!rc) return 0;
+				if (!enableRightClick.load()) return 0;
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
@@ -99,9 +99,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 	}
 
-	EnterCriticalSection(&inputQueueLock);
-	inputQueue.emplace(InputEvent{ time, inputType, inputState, player });
-	LeaveCriticalSection(&inputQueueLock);
+	{
+		std::lock_guard lock(inputQueueLock);
+		inputQueue.emplace(InputEvent{ time, inputType, inputState, player });
+	}
 
 	return 0;
 }

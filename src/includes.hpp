@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <queue>
+#include <mutex>
+
 #include <Geode/Geode.hpp>
 
 using namespace geode::prelude;
@@ -39,13 +42,13 @@ struct Step {
 
 extern std::queue<struct InputEvent> inputQueue;
 
-extern std::unordered_set<size_t> inputBinds[6];
+extern std::array<std::unordered_set<size_t>, 6> inputBinds;
 extern std::unordered_set<USHORT> heldInputs;
 
-extern CRITICAL_SECTION inputQueueLock;
-extern CRITICAL_SECTION keybindsLock;
+extern std::mutex inputQueueLock;
+extern std::mutex keybindsLock;
 
-extern bool enableRightClick;
+extern std::atomic<bool> enableRightClick;
 extern bool threadPriority;
 
 void inputThread();
