@@ -10,6 +10,7 @@
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
+#include <Geode/modify/GJGameLevel.hpp>
 
 #include <geode.custom-keybinds/include/Keybinds.hpp>
 
@@ -394,3 +395,14 @@ $on_mod(Loaded) {
 
 	std::thread(inputThread).detach();
 }
+
+class $modify(GJGameLevel) {
+	void savePercentage(int percent, bool p1, int clicks, int attempts, bool valid) {
+		valid = (
+			 Mod::get()->getSettingValue<bool>("soft-toggle") &&
+			!Mod::get()->getSettingValue<bool>("actual-delta")
+		);
+
+		GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
+	}
+};
