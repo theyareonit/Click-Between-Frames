@@ -15,7 +15,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	LARGE_INTEGER time;
 	PlayerButton inputType;
 	bool inputState;
-	bool player;
+	bool player1;
 
 	QueryPerformanceCounter(&time);
 	
@@ -48,23 +48,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			}
 			
 			bool shouldEmplace = true;
-			player = Player1;
+			player1 = true;
 
-			std::array<std::unordered_set<size_t>, 6> binds;
 			{
 				std::lock_guard lock(keybindsLock);
-				binds = inputBinds;
-			}
 
-			if (binds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
-			else if (binds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
-			else if (binds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
-			else {
-				player = Player2;
-				if (binds[p2Jump].contains(vkey)) inputType = PlayerButton::Jump;
-				else if (binds[p2Left].contains(vkey)) inputType = PlayerButton::Left;
-				else if (binds[p2Right].contains(vkey)) inputType = PlayerButton::Right;
-				else shouldEmplace = false;
+				if (inputBinds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
+				else if (inputBinds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
+				else if (inputBinds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
+				else {
+					player1 = false;
+					if (inputBinds[p2Jump].contains(vkey)) inputType = PlayerButton::Jump;
+					else if (inputBinds[p2Left].contains(vkey)) inputType = PlayerButton::Left;
+					else if (inputBinds[p2Right].contains(vkey)) inputType = PlayerButton::Right;
+					else shouldEmplace = false;
+				}
 			}
 
 			if (!inputState) heldInputs.emplace(vkey);
@@ -76,13 +74,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			USHORT flags = raw->data.mouse.usButtonFlags;
 			bool shouldEmplace = true;
 
-			player = Player1;
+			player1 = true;
 			inputType = PlayerButton::Jump;
 
 			if (flags & RI_MOUSE_BUTTON_1_DOWN) inputState = Press;
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
-				player = Player2;
+				player1 = false;
 				if (!enableRightClick.load()) return 0;
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
@@ -101,14 +99,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 	{
 		std::lock_guard lock(inputQueueLock);
-		inputQueue.emplace(InputEvent{ time, inputType, inputState, player });
+		inputQueue.emplace(InputEvent{ time, inputType, inputState, player1 });
 	}
 
 	return 0;
 }
 
 void inputThread() {
-
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
@@ -144,4 +141,51 @@ void inputThread() {
 	while (GetMessage(&msg, hwnd, 0, 0)) {
 		DispatchMessage(&msg);
 	}
+}
+
+void linuxCheckInputs() {
+    DWORD waitResult = WaitForSingleObject(hMutex, 1);
+    if (waitResult == WAIT_OBJECT_0) {
+        LinuxInputEvent* events = static_cast<LinuxInputEvent*>(pBuf);
+        for (int i = 0; i < BUFFER_SIZE; i++) {
+			if (events[i].type == 0) break;
+
+			InputEvent input;
+			bool player1 = true;
+
+			USHORT scanCode = events[i].code;
+			if (scanCode == 0x3110) { // left click
+				input.inputType = PlayerButton::Jump;
+			}
+			else if (scanCode == 0x3111) { // right click
+				if (!enableRightClick.load()) continue;
+				input.inputType = PlayerButton::Jump;
+				player1 = false;
+			}
+			else {
+				USHORT keyCode = MapVirtualKeyExA(scanCode, MAPVK_VSC_TO_VK, GetKeyboardLayout(0));
+				if (inputBinds[p1Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+				else if (inputBinds[p1Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+				else if (inputBinds[p1Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+				else {
+					player1 = false;
+					if (inputBinds[p2Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+					else if (inputBinds[p2Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+					else if (inputBinds[p2Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+					else continue;
+            	}
+			}
+
+            input.inputState = !events[i].value;
+			input.time = events[i].time;
+            input.isPlayer1 = player1;
+                
+            inputQueueCopy.emplace(input);
+        }
+		ZeroMemory(events, sizeof(LinuxInputEvent[BUFFER_SIZE]));
+        ReleaseMutex(hMutex);
+    }
+    else if (waitResult != WAIT_TIMEOUT) {
+        log::error("WaitForSingleObject failed: {}", GetLastError());
+    }
 }

@@ -17,21 +17,23 @@ enum GameAction : int {
 	p2Right = 5
 };
 
-enum Player : bool {
-	Player1 = 0,
-	Player2 = 1
-};
-
 enum State : bool {
 	Press = 0,
 	Release = 1
+};
+
+struct __attribute__((packed)) LinuxInputEvent {
+	LARGE_INTEGER time;
+	USHORT type;
+	USHORT code;
+	int value;
 };
 
 struct InputEvent {
 	LARGE_INTEGER time;
 	PlayerButton inputType;
 	bool inputState;
-	bool player;
+	bool isPlayer1;
 };
 
 struct Step {
@@ -40,7 +42,12 @@ struct Step {
 	bool endStep;
 };
 
+extern HANDLE hSharedMem;
+extern HANDLE hMutex;
+extern LPVOID pBuf;
+
 extern std::queue<struct InputEvent> inputQueue;
+extern std::queue<struct InputEvent> inputQueueCopy;
 
 extern std::array<std::unordered_set<size_t>, 6> inputBinds;
 extern std::unordered_set<USHORT> heldInputs;
@@ -50,5 +57,9 @@ extern std::mutex keybindsLock;
 
 extern std::atomic<bool> enableRightClick;
 extern bool threadPriority;
+extern bool isLinux;
 
+constexpr size_t BUFFER_SIZE = 20;
+
+void linuxCheckInputs();
 void inputThread();

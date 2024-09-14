@@ -1,6 +1,10 @@
-# v1.1.22
+# v1.2.0
 
+* Potentially fix slope bugs
 * Potentially improve performance
+* Fix keyboard input not working on Linux
+* Significantly improve input precision on Linux
+* Don't submit CBF completions to leaderboards anymore
 
 # v1.1.21
 

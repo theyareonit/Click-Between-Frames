@@ -10,8 +10,11 @@
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
+#include <Geode/modify/CreatorLayer.hpp>
 
 #include <geode.custom-keybinds/include/Keybinds.hpp>
+
+typedef void (*wine_get_host_version)(const char **sysname, const char **release);
 
 constexpr double smallestFloat = std::numeric_limits<float>::min();
 
@@ -27,9 +30,13 @@ LARGE_INTEGER lastFrameTime;
 LARGE_INTEGER lastPhysicsFrameTime;
 LARGE_INTEGER currentFrameTime;
 
+HANDLE hSharedMem = NULL;
+HANDLE hMutex = NULL;
+
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
+bool isLinux = false;
 bool lateCutoff;
 
 void updateInputQueueAndTime(int stepCount) {
@@ -48,7 +55,11 @@ void updateInputQueueAndTime(int stepCount) {
 		lastFrameTime = lastPhysicsFrameTime;
 		stepQueue = {}; // just in case
 
-		{
+		if (isLinux) {
+			GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime);
+			linuxCheckInputs();
+		}
+		else {
 			std::lock_guard lock(inputQueueLock);
 
 			if (lateCutoff) {
@@ -113,7 +124,7 @@ Step updateDeltaFactorAndInput() {
 		PlayLayer* playLayer = PlayLayer::get();
 
 		enableInput = true;
-		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, !nextInput.player);
+		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, nextInput.isPlayer1);
 		enableInput = false;
 	}
 
@@ -189,7 +200,7 @@ class $modify(CCDirector) {
 
 			inputQueueCopy = {};
 
-			{
+			if (!isLinux) {
 				std::lock_guard lock(inputQueueLock);
 				inputQueue = {};
 			}
@@ -280,8 +291,9 @@ class $modify(PlayerObject) {
 			if (p1NotBuffering) {
 				PlayerObject::update(newTimeFactor);
 				if (!step.endStep) {
-					if (firstLoop && (this->m_yVelocity < 0 ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
+					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
+					else pl->checkCollisions(this, 0.25f, true);
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -294,8 +306,9 @@ class $modify(PlayerObject) {
 				if (p2NotBuffering) {
 					p2->update(newTimeFactor);
 					if (!step.endStep) {
-						if (firstLoop && (p2->m_yVelocity < 0 ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
+						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
+						else pl->checkCollisions(p2, 0.25f, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
@@ -357,6 +370,36 @@ class $modify(EndLevelLayer) {
 	}
 };
 
+LPVOID pBuf;
+
+class $modify(CreatorLayer) {
+	bool init() {
+		if (!CreatorLayer::init()) return false;
+
+		DWORD waitResult = WaitForSingleObject(hMutex, 5);
+		if (waitResult == WAIT_OBJECT_0) {
+			if (static_cast<LinuxInputEvent*>(pBuf)[0].type == 3 && !softToggle) {
+				log::error("Linux input failed");
+				FLAlertLayer* popup = FLAlertLayer::create(
+					"CBF Linux", 
+					"Failed to read input devices.\nOn most distributions, this can be resolved by adding yourself to the <cr>input</c> group (this will make your system slightly less secure).\nIf the issue persists, please contact the mod developer.", 
+					"OK"
+				);
+				popup->m_scene = this;
+				popup->show();
+			}
+			ReleaseMutex(hMutex);
+		}
+		else if (waitResult == WAIT_TIMEOUT) {
+			log::error("Mutex stalling");
+		}
+		else {
+			log::error("CreatorLayer WaitForSingleObject failed: {}", GetLastError());
+		}
+		return true;
+	} 
+};
+
 Patch* patch;
 
 void toggleMod(bool disable) {
@@ -376,6 +419,8 @@ void toggleMod(bool disable) {
 	softToggle = disable;
 }
 
+HANDLE gdMutex;
+
 $on_mod(Loaded) {
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
@@ -392,5 +437,66 @@ $on_mod(Loaded) {
 
 	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
 
-	std::thread(inputThread).detach();
+	HMODULE ntdll = GetModuleHandle("ntdll.dll");
+	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");
+	if (wghv) {
+		const char* sysname;
+		const char* release;
+		wghv(&sysname, &release);
+
+		std::string sys = sysname;
+		log::info("Wine {}", sys);
+		if (sys == "Linux") { // background raw keyboard input doesn't work in Wine
+            isLinux = true;
+
+            hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]), "LinuxSharedMemory");
+			if (hSharedMem == NULL) {
+				log::error("Failed to create file mapping: {}", GetLastError());
+				return;
+			}
+
+			pBuf = MapViewOfFile(hSharedMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]));
+			if (pBuf == NULL) {
+        		log::error("Failed to map view of file: {}", GetLastError());
+				CloseHandle(hSharedMem);
+        		return;
+    		}
+
+			hMutex = CreateMutex(NULL, FALSE, "CBFLinuxMutex");
+			if (hMutex == NULL) {
+				log::error("Failed to create shared memory mutex: {}", GetLastError());
+				CloseHandle(hSharedMem);
+				return;
+			}
+
+			gdMutex = CreateMutex(NULL, TRUE, "CBFWatchdogMutex"); // will be released when gd closes
+			if (gdMutex == NULL) {
+				log::error("Failed to create watchdog mutex: {}", GetLastError());
+				CloseHandle(hMutex);
+				CloseHandle(hSharedMem);
+				return;
+			}
+
+			SECURITY_ATTRIBUTES sa;
+			sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+			sa.bInheritHandle = TRUE;
+			sa.lpSecurityDescriptor = NULL;
+
+			STARTUPINFO si;
+			PROCESS_INFORMATION pi;
+			ZeroMemory(&si, sizeof(si));
+			si.cb = sizeof(si);
+			ZeroMemory(&pi, sizeof(pi));
+
+			if (!CreateProcess(CCFileUtils::get()->fullPathForFilename("linux-input.exe"_spr, true).c_str(), NULL, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+				log::error("Failed to launch Linux input program: {}", GetLastError());
+				CloseHandle(hMutex);
+				CloseHandle(gdMutex);
+				CloseHandle(hSharedMem);
+				return;
+			}
+		}
+	}
+
+	if (!isLinux) std::thread(inputThread).detach();
 }
