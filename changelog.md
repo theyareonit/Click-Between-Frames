@@ -4,7 +4,7 @@
 * Potentially improve performance
 * Fix keyboard input not working on Linux
 * Significantly improve input precision on Linux
-* Don't submit CBF completions to leaderboards anymore
+* Don't submit CBF completions on star rated levels to leaderboards
 
 # v1.1.21
 

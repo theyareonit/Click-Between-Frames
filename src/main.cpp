@@ -404,8 +404,9 @@ class $modify(CreatorLayer) {
 class $modify(GJGameLevel) {
 	void savePercentage(int percent, bool p1, int clicks, int attempts, bool valid) {
 		valid = (
-			 Mod::get()->getSettingValue<bool>("soft-toggle") &&
-			!Mod::get()->getSettingValue<bool>("actual-delta")
+			Mod::get()->getSettingValue<bool>("soft-toggle")
+			&& !Mod::get()->getSettingValue<bool>("actual-delta")
+			|| this->m_stars == 0
 		);
 
 		GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
