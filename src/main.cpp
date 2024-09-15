@@ -192,6 +192,7 @@ class $modify(CCDirector) {
 		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
 
 		if (softToggle 
+			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
 			|| (getChildOfType<PauseLayer>(par, 0) != nullptr)) 
