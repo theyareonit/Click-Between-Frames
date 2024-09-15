@@ -1,5 +1,5 @@
 {
-	"geode": "3.5.0",
+	"geode": "3.6.1",
 	"gd": {
 		"win": "2.206"
 	},
@@ -54,9 +54,10 @@
 		},
 		"thread-priority": {
 			"name": "Thread Priority",
-			"description": "Whether to automatically set CBF's thread priority to the highest available. \n\nRequires game restart to apply.",
+			"description": "Whether to automatically set CBF's thread priority to the highest available.",
 			"type": "bool",
-			"default": true
+			"default": true,
+			"requires-restart": true
 		}
 	},
 	"repository": "https://github.com/theyareonit/Click-Between-Frames",
