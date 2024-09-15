@@ -96,7 +96,9 @@ int main() {
             continue;
         }
 
-        if (libevdev_get_id_bustype(dev) == BUS_USB || libevdev_get_id_bustype(dev) == BUS_BLUETOOTH) {
+
+        int bus = libevdev_get_id_bustype(dev);
+        if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
             devices.push_back(dev);
             
             epoll_event ev;
