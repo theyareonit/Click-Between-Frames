@@ -96,19 +96,20 @@ void updateInputQueueAndTime(int stepCount) {
 			double lastDFactor = 0.0;
 			while (true) {
 				InputEvent front;
-				if (!inputQueueCopy.empty()) {
-					front = inputQueueCopy.front();
-					if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
-						double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-						stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, SMALLEST_FLOAT, 1.0), false });
-						lastDFactor = dFactor;
-						inputQueueCopy.pop();
-						continue;
-					}
+				bool empty = inputQueueCopy.empty();
+				if (!empty) front = inputQueueCopy.front();
+
+				if (!empty && front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
+					double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
+					stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, SMALLEST_FLOAT, 1.0), false });
+					inputQueueCopy.pop();
+					lastDFactor = dFactor;
+					continue;
 				}
-				front = nextInput;
-				stepQueue.emplace(Step{ front, std::max(SMALLEST_FLOAT, 1.0 - lastDFactor), true });
-				break;
+				else {
+					stepQueue.emplace(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - lastDFactor), true });
+					break;
+				}
 			}
 		}
 	}
