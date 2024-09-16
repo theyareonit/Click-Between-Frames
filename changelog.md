@@ -1,7 +1,8 @@
 # v1.2.0
 
-* Potentially fix slope bugs
+* Potentially reduce slope bugs
 * Potentially improve performance
+* Fix CBF not working for dash orb releases
 * Fix keyboard input not working on Linux
 * Significantly improve input precision on Linux
 * Disable input when unfocused

@@ -18,10 +18,10 @@
 
 typedef void (*wine_get_host_version)(const char **sysname, const char **release);
 
-constexpr double smallestFloat = std::numeric_limits<float>::min();
+constexpr double SMALLEST_FLOAT = std::numeric_limits<float>::min();
 
-const InputEvent emptyInput = InputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
-const Step emptyStep = Step{ emptyInput, 1.0, true };
+constexpr InputEvent EMPTY_INPUT = InputEvent{ 0, 0, PlayerButton::Jump, 0, 0 };
+constexpr Step EMPTY_STEP = Step{ EMPTY_INPUT, 1.0, true };
 
 std::queue<struct InputEvent> inputQueueCopy;
 std::queue<struct Step> stepQueue;
@@ -53,7 +53,7 @@ void updateInputQueueAndTime(int stepCount) {
 		return;
 	}
 	else {
-		nextInput = emptyInput;
+		nextInput = EMPTY_INPUT;
 		lastFrameTime = lastPhysicsFrameTime;
 		stepQueue = {}; // just in case
 
@@ -100,14 +100,14 @@ void updateInputQueueAndTime(int stepCount) {
 					front = inputQueueCopy.front();
 					if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
 						double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-						stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, smallestFloat, 1.0), false });
+						stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, SMALLEST_FLOAT, 1.0), false });
 						lastDFactor = dFactor;
 						inputQueueCopy.pop();
 						continue;
 					}
 				}
 				front = nextInput;
-				stepQueue.emplace(Step{ front, std::max(smallestFloat, 1.0 - lastDFactor), true });
+				stepQueue.emplace(Step{ front, std::max(SMALLEST_FLOAT, 1.0 - lastDFactor), true });
 				break;
 			}
 		}
@@ -117,7 +117,7 @@ void updateInputQueueAndTime(int stepCount) {
 Step updateDeltaFactorAndInput() {
 	enableInput = false;
 
-	if (stepQueue.empty()) return emptyStep;
+	if (stepQueue.empty()) return EMPTY_STEP;
 
 	Step front = stepQueue.front();
 	double deltaFactor = front.deltaFactor;
@@ -272,10 +272,12 @@ class $modify(PlayerObject) {
 
 		bool p1NotBuffering = p1StartedOnGround
 			|| this->m_touchingRings->count()
+			|| this->m_isDashing
 			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
 
 		bool p2NotBuffering = p2StartedOnGround
 			|| p2->m_touchingRings->count()
+			|| p2->m_isDashing
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
 		p1Pos = PlayerObject::getPosition();
