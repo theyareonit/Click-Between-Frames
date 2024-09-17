@@ -388,7 +388,7 @@ class $modify(CreatorLayer) {
 				log::error("Linux input failed");
 				FLAlertLayer* popup = FLAlertLayer::create(
 					"CBF Linux", 
-					"Failed to read input devices.\nOn most distributions, this can be resolved by adding yourself to the <cr>input</c> group (this will make your system slightly less secure).\nIf the issue persists, please contact the mod developer.", 
+					"Failed to read input devices.\nOn most distributions, this can be resolved with the following command: <cr>sudo usermod -aG input $USER</c> (reboot afterward; this will make your system slightly less secure).\nIf the issue persists, please contact the mod developer.", 
 					"OK"
 				);
 				popup->m_scene = this;
@@ -507,7 +507,7 @@ $on_mod(Loaded) {
 			si.cb = sizeof(si);
 			ZeroMemory(&pi, sizeof(pi));
 
-			std::string path = "\"" + CCFileUtils::get()->fullPathForFilename("linux-input.exe"_spr, true) + "\"";
+			std::string path = "\"" + CCFileUtils::get()->fullPathForFilename("linux-input.exe.so"_spr, true) + "\"";
 			std::replace(path.begin(), path.end(), '\\', '/');
 			
 			std::unique_ptr<char[]> cmd(new char[path.size() + 1]);

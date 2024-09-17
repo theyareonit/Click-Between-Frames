@@ -1,3 +1,8 @@
+# v1.2.1
+
+* Fix a bug that could cause input on Linux not to work
+* Update warning about permissions on Linux
+
 # v1.2.0
 
 * Potentially reduce slope bugs
