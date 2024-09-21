@@ -4,9 +4,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <dirent.h>
 #include <sys/epoll.h>
 
 #include <iostream>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <atomic>
@@ -83,38 +85,56 @@ int main() {
         return 1;
     }
 
-    for (int i = 0;; i++) {
-        std::string path = "/dev/input/event" + std::to_string(i);
-        int fd = open(path.c_str(), O_RDONLY);
-        if (fd == -1) break;
+    // New code to read all input devices
+    const char* input_dir = "/dev/input";
+    DIR* dir = opendir(input_dir);
+    if (dir == nullptr) {
+        std::cerr << "[CBF] Failed to open directory " << input_dir << ": " << strerror(errno) << std::endl;
+        return 1;
+    }
 
-        libevdev* dev = nullptr;
-        int rc = libevdev_new_from_fd(fd, &dev);
-        if (rc < 0) {
-            std::cerr << "[CBF] Failed to create evdev device: " << strerror(-rc) << std::endl;
-            close(fd);
-            continue;
-        }
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string filename(entry->d_name);
+        if (filename.find("event") == 0) {
+            std::string path = std::string(input_dir) + "/" + filename;
+            int fd = open(path.c_str(), O_RDONLY);
+            if (fd == -1) {
+                std::cerr << "[CBF] Failed to open " << path << ": " << strerror(errno) << std::endl;
+                continue;
+            }
 
-
-        int bus = libevdev_get_id_bustype(dev);
-        if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
-            devices.push_back(dev);
-            
-            epoll_event ev;
-            ev.events = EPOLLIN;
-            ev.data.ptr = dev;
-            if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-                std::cerr << "[CBF] Failed to add fd to epoll: " << strerror(errno) << std::endl;
-                libevdev_free(dev);
+            libevdev* dev = nullptr;
+            int rc = libevdev_new_from_fd(fd, &dev);
+            if (rc < 0) {
+                std::cerr << "[CBF] Failed to create evdev device for " << path << ": " << strerror(-rc) << std::endl;
                 close(fd);
                 continue;
             }
-        } else {
-            libevdev_free(dev);
-            close(fd);
+
+            int bus = libevdev_get_id_bustype(dev);
+            if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
+                devices.push_back(dev);
+                
+                epoll_event ev;
+                ev.events = EPOLLIN;
+                ev.data.ptr = dev;
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+                    std::cerr << "[CBF] Failed to add fd to epoll for " << path << ": " << strerror(errno) << std::endl;
+                    libevdev_free(dev);
+                    close(fd);
+                    continue;
+                }
+                
+                std::cerr << "[CBF] Added device: " << path << std::endl;
+            } else {
+                libevdev_free(dev);
+                close(fd);
+            }
         }
     }
+
+    closedir(dir);
 
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
