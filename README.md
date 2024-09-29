@@ -4,7 +4,7 @@ Install [Geode](https://geode-sdk.org/install/) for Windows, then install this m
 
 # What does it do
 
-This mod allows your inputs to register in between visual frames, which drastically increases input precision on low framerates like 60FPS.
+Click-Between-Frames multithreads user inputs, meaning inputs can occur in between visual frames. This can  drastically increase input precision on low framerates, such as 60FPS.
 It's similar to TPS Bypass or Draw Divide, but with much less lag and (hopefully) far fewer physics-related bugs.
 
 # How to use
