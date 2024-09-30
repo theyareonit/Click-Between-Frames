@@ -7,7 +7,7 @@
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
-	"description": "Allows inputs to register between frames. Like TPS Bypass or Draw Divide, but with less lag and fewer physics bugs.",
+	"description": "Allows inputs to register between frames.",
 	"dependencies": [
 		{
 			"id": "geode.custom-keybinds",
@@ -60,7 +60,9 @@
 			"requires-restart": true
 		}
 	},
-	"repository": "https://github.com/theyareonit/Click-Between-Frames",
+	"links": {
+		"source": "https://github.com/theyareonit/Click-Between-Frames"
+	},
 	"resources": {
 		"files": [
 			"resources/linux-input.exe",
