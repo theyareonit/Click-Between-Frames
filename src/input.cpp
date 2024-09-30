@@ -16,12 +16,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	PlayerButton inputType;
 	bool inputState;
 	bool player1;
-
-	QueryPerformanceCounter(&time);
 	
 	LPVOID pData;
 	switch (uMsg) {
 	case WM_INPUT: {
+
 		UINT dwSize;
 		GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
 
@@ -36,6 +35,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		RAWINPUT* raw = (RAWINPUT*)lpb.get();
 		switch (raw->header.dwType) {
 		case RIM_TYPEKEYBOARD: {
+			QueryPerformanceCounter(&time);
+
 			USHORT vkey = raw->data.keyboard.VKey;
 			inputState = raw->data.keyboard.Flags & RI_KEY_BREAK;
 
@@ -86,6 +87,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
 			}
+
+			QueryPerformanceCounter(&time); // dont call on mouse move events
 			break;
 		}
 		default:
