@@ -65,7 +65,6 @@
 	},
 	"resources": {
 		"files": [
-			"resources/linux-input.exe",
 			"resources/linux-input.exe.so"
 		]
 	}

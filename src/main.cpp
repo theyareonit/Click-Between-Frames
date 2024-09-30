@@ -507,13 +507,9 @@ $on_mod(Loaded) {
 			si.cb = sizeof(si);
 			ZeroMemory(&pi, sizeof(pi));
 
-			std::string path = "\"" + CCFileUtils::get()->fullPathForFilename("linux-input.exe.so"_spr, true) + "\"";
-			std::replace(path.begin(), path.end(), '\\', '/');
-			
-			std::unique_ptr<char[]> cmd(new char[path.size() + 1]);
-			strcpy(cmd.get(), path.c_str());
+			std::string path = CCFileUtils::get()->fullPathForFilename("linux-input.exe.so"_spr, true);
 
-			if (!CreateProcess(NULL, cmd.get(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+			if (!CreateProcess(path.c_str(), NULL, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
 				log::error("Failed to launch Linux input program: {}", GetLastError());
 				CloseHandle(hMutex);
 				CloseHandle(gdMutex);
