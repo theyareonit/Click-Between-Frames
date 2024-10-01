@@ -1,0 +1,1 @@
+Please support me through [Stripe](https://donate.stripe.com/aEU14Eaw9cgiam4288) if you enjoy the mod!

@@ -26,3 +26,5 @@ The mod comes with its own version of Physics Bypass in the mod options. Be warn
 - Controller input is not yet supported
 
 Icon by alex/sincos.
+
+If you like the mod, please support me on [Stripe](https://donate.stripe.com/aEU14Eaw9cgiam4288)!

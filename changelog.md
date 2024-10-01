@@ -1,3 +1,10 @@
+# v1.2.2
+
+* Add "Reduce Mouse Lag" option to improve performance with high polling rate mice
+* Add "Safe Mode" option to prevent submission of progress/completions
+* Possibly fix input on Linux for some people
+* Add back donation link cuz Stripe finally reactivated my account
+
 # v1.2.1
 
 * Fix a bug that could cause input on Linux not to work
