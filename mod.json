@@ -28,6 +28,10 @@
 		"enhancement"
 	],
 	"settings": {
+		"functionality": {
+			"name": "Functionality",
+			"type": "title"
+		},
 		"soft-toggle": {
 			"name": "Disable CBF",
 			"description": "Disable CBF without needing to restart GD. This option does not disable physics bypass if you have it enabled!",
@@ -51,6 +55,10 @@
 			"description": "Use right click for player 2 jump.",
 			"type": "bool",
 			"default": false
+		},
+		"performance": {
+			"name": "Performance",
+			"type": "title"
 		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
