@@ -7,7 +7,7 @@
 #include <Geode/loader/SettingEvent.hpp>
 
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/CCDirector.hpp>
+#include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
@@ -176,21 +176,37 @@ void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
 	*(long long*)((char*)p + 0x5d0) = -1;
 }
 
+bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+bool safeMode;
+
 class $modify(PlayLayer) {
 	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
 		updateKeybinds();
 		return PlayLayer::init(level, useReplay, dontCreateObjects);
 	}
+
+	void levelComplete() {
+		bool testMode = this->m_isTestMode;
+		if (safeMode && !softToggle) this->m_isTestMode = true;
+
+		PlayLayer::levelComplete();
+
+		this->m_isTestMode = testMode;
+	}
+
+	void showNewBest(bool p0, int p1, int p2, bool p3, bool p4, bool p5) {
+		if (!safeMode || softToggle) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
+	}
 };
 
-bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+bool mouseFix;
 
-class $modify(CCDirector) {
-	void setDeltaTime(float dTime) {
+class $modify(CCEGLView) {
+	void pollEvents() {
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
 
-		if (!lateCutoff) QueryPerformanceCounter(&currentFrameTime);
+		if (!lateCutoff && !isLinux) QueryPerformanceCounter(&currentFrameTime);
 
 		if (softToggle 
 			|| !GetFocus() // not in foreground
@@ -209,8 +225,12 @@ class $modify(CCDirector) {
 				inputQueue = {};
 			}
 		}
+		else if (playLayer && mouseFix) {
+			MSG msg;
+			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE)); // clear mouse inputs from message queue
+		}
 
-		CCDirector::setDeltaTime(dTime);
+		CCEGLView::pollEvents();
 	}
 };
 
@@ -414,10 +434,9 @@ class $modify(GJGameLevel) {
 			|| this->m_stars == 0
 		);
 
-		GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
+		if (!safeMode || softToggle) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
 	}
 };
-
 
 Patch* patch;
 
@@ -455,6 +474,16 @@ $on_mod(Loaded) {
 	});
 
 	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
+
+	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
+	listenForSettingChanges("mouse-fix", +[](bool enable) {
+		mouseFix = enable;
+	});
+
+	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
+	listenForSettingChanges("safe-mode", +[](bool enable) {
+		safeMode = enable;
+	});
 
 	HMODULE ntdll = GetModuleHandle("ntdll.dll");
 	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");

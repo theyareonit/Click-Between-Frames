@@ -42,13 +42,13 @@
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
-			"description": "Check for inputs near the end of the frame instead of the start. \n\nSlightly reduces input lag, but also slightly reduces precision. May help if you are experiencing dropped or delayed inputs.",
+			"description": "Check for inputs near the end of the frame instead of the start.\n\nSlightly reduces input lag, but also slightly hurts precision. May help if you are experiencing dropped or delayed inputs.",
 			"type": "bool",
 			"default": false
 		},
 		"actual-delta": {
 			"name": "Physics Bypass",
-			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked. \n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false
 		},
@@ -58,6 +58,18 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true
+		},
+		"mouse-fix": {
+			"name": "Reduce Mouse Lag",
+			"description": "Reduce lag when using high polling rate mice.\nRequires CBF to be enabled.\nExperimental, may break things like Mega Hack while unpaused in levels.",
+			"type": "bool",
+			"default": false
+		},
+		"safe-mode": {
+			"name": "Safe Mode",
+			"description": "Disable progress & stats on rated levels.",
+			"type": "bool",
+			"default": false
 		}
 	},
 	"links": {
