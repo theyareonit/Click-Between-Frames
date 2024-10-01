@@ -463,9 +463,9 @@ $on_mod(Loaded) {
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
 
-	lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
-	listenForSettingChanges("late-cutoff", +[](bool enable) {
-		lateCutoff = enable;
+	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
+	listenForSettingChanges("safe-mode", +[](bool enable) {
+		safeMode = enable;
 	});
 
 	actualDelta = Mod::get()->getSettingValue<bool>("actual-delta");
@@ -473,17 +473,17 @@ $on_mod(Loaded) {
 		actualDelta = enable;
 	});
 
-	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
-
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
 	listenForSettingChanges("mouse-fix", +[](bool enable) {
 		mouseFix = enable;
 	});
 
-	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
-	listenForSettingChanges("safe-mode", +[](bool enable) {
-		safeMode = enable;
+	lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
+	listenForSettingChanges("late-cutoff", +[](bool enable) {
+		lateCutoff = enable;
 	});
+
+	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
 
 	HMODULE ntdll = GetModuleHandle("ntdll.dll");
 	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");
