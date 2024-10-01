@@ -226,7 +226,7 @@ class $modify(CCEGLView) {
 				inputQueue = {};
 			}
 		}
-		else if (mouseFix) {
+		else if (mouseFix && !skipUpdate) {
 			MSG msg;
 			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE)); // clear mouse inputs from message queue
 		}
