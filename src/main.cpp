@@ -212,7 +212,8 @@ class $modify(CCEGLView) {
 			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
-			|| (getChildOfType<PauseLayer>(par, 0) != nullptr)) 
+			|| (getChildOfType<PauseLayer>(par, 0))
+			|| (getChildOfType<EndLevelLayer>(playLayer, 0)))
 		{
 			firstFrame = true;
 			skipUpdate = true;
@@ -225,7 +226,7 @@ class $modify(CCEGLView) {
 				inputQueue = {};
 			}
 		}
-		else if (playLayer && mouseFix) {
+		else if (mouseFix) {
 			MSG msg;
 			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE)); // clear mouse inputs from message queue
 		}
