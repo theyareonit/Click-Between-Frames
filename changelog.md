@@ -1,3 +1,7 @@
+# v1.2.3
+
+* Fix "Reduce Mouse Lag" option causing the game to pause
+
 # v1.2.2
 
 * Add "Reduce Mouse Lag" option to improve performance with high polling rate mice

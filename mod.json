@@ -1,9 +1,9 @@
 {
-	"geode": "3.7.1",
+	"geode": "3.8.1",
 	"gd": {
 		"win": "2.206"
 	},
-	"version": "v1.2.2",
+	"version": "v1.2.3",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -62,7 +62,7 @@
 		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
-			"description": "Reduce lag when using high polling rate mice.\nRequires CBF to be enabled.\nExperimental, may break things like Mega Hack while unpaused in levels.",
+			"description": "Reduce lag when using high polling rate mice.\nRequires CBF to be enabled.\nExperimental, may break things.",
 			"type": "bool",
 			"default": false
 		},
