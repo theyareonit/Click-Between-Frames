@@ -258,7 +258,11 @@ class $modify(GJBaseGameLayer) {
 			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
-			else skipUpdate = true;
+			else {
+				skipUpdate = true;
+				firstFrame = true;
+				skipUpdate = true;
+			}
 		}
 		
 		return modifiedDelta;
