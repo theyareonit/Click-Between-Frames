@@ -259,9 +259,8 @@ class $modify(GJBaseGameLayer) {
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else {
-				skipUpdate = true;
+				enableInput = true;
 				firstFrame = true;
-				skipUpdate = true;
 			}
 		}
 		
