@@ -4,7 +4,6 @@
 #include <algorithm>
 
 #include <Geode/Geode.hpp>
-#include <Geode/loader/SettingEvent.hpp>
 
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCEGLView.hpp>
@@ -212,8 +211,8 @@ class $modify(CCEGLView) {
 			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
-			|| (getChildOfType<PauseLayer>(par, 0))
-			|| (getChildOfType<EndLevelLayer>(playLayer, 0)))
+			|| (par->getChildByType<PauseLayer>(0))
+			|| (playLayer->getChildByType<EndLevelLayer>(0)))
 		{
 			firstFrame = true;
 			skipUpdate = true;

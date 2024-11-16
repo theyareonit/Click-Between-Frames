@@ -1,9 +1,9 @@
 {
-	"geode": "3.8.1",
+	"geode": "4.0.0-beta.1",
 	"gd": {
-		"win": "2.206"
+		"win": "2.2074"
 	},
-	"version": "v1.2.3",
+	"version": "v1.2.4",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -11,7 +11,7 @@
 	"dependencies": [
 		{
 			"id": "geode.custom-keybinds",
-			"version": ">=v1.6.0",
+			"version": ">=v1.10.0",
 			"importance": "required"
 		}
 	],
