@@ -1,9 +1,7 @@
 #include "includes.hpp"
 
 #include <limits>
-#include <algorithm>
 
-#include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 
 #include <Geode/modify/PlayLayer.hpp>
@@ -13,8 +11,6 @@
 #include <Geode/modify/EndLevelLayer.hpp>
 #include <Geode/modify/CreatorLayer.hpp>
 #include <Geode/modify/GJGameLevel.hpp>
-
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 typedef void (*wine_get_host_version)(const char **sysname, const char **release);
 
@@ -258,7 +254,10 @@ class $modify(GJBaseGameLayer) {
 			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
 			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
-			else skipUpdate = true;
+			else {
+				skipUpdate = true;
+				enableInput = true;
+			}
 		}
 		
 		return modifiedDelta;

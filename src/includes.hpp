@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include <Geode/Geode.hpp>
+#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 using namespace geode::prelude;
 
