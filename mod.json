@@ -62,7 +62,7 @@
 		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
-			"description": "Reduce lag when using high polling rate mice.\nRequires CBF to be enabled.\nExperimental, may break things.",
+			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
 			"default": false
 		},

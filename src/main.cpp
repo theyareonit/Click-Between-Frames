@@ -219,9 +219,15 @@ class $modify(CCEGLView) {
 				inputQueue = {};
 			}
 		}
-		else if (mouseFix && !skipUpdate) {
+		if (mouseFix && !skipUpdate) {
 			MSG msg;
-			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST + 1, WM_MOUSELAST, PM_REMOVE)); // clear mouse inputs from message queue
+			int index = 1;
+			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST + index, WM_MOUSELAST, PM_NOREMOVE)) { // check for mouse inputs in the queue
+				if (msg.message == WM_MOUSEMOVE || msg.message == WM_NCMOUSEMOVE) {
+					PeekMessage(&msg, NULL, WM_MOUSEFIRST + index, WM_MOUSELAST, PM_REMOVE); // remove mouse movements from queue
+				}
+				else index++;
+			}
 		}
 
 		CCEGLView::pollEvents();
