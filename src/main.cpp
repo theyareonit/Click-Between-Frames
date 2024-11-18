@@ -22,6 +22,8 @@ constexpr Step EMPTY_STEP = Step{ EMPTY_INPUT, 1.0, true };
 std::queue<struct InputEvent> inputQueueCopy;
 std::queue<struct Step> stepQueue;
 
+std::atomic<bool> softToggle;
+
 InputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
 
 LARGE_INTEGER lastFrameTime;
@@ -169,7 +171,6 @@ void newResetCollisionLog(PlayerObject* p) { // inlined in 2.2074...
 	*(long long*)((char*)p + 0x5d0) = -1;
 }
 
-bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
 bool safeMode;
 
 class $modify(PlayLayer) {
@@ -180,7 +181,7 @@ class $modify(PlayLayer) {
 
 	void levelComplete() {
 		bool testMode = this->m_isTestMode;
-		if (safeMode && !softToggle) this->m_isTestMode = true;
+		if (safeMode && !softToggle.load()) this->m_isTestMode = true;
 
 		PlayLayer::levelComplete();
 
@@ -188,7 +189,7 @@ class $modify(PlayLayer) {
 	}
 
 	void showNewBest(bool p0, int p1, int p2, bool p3, bool p4, bool p5) {
-		if (!safeMode || softToggle) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
+		if (!safeMode || softToggle.load()) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
 	}
 };
 
@@ -201,7 +202,7 @@ class $modify(CCEGLView) {
 
 		if (!lateCutoff && !linuxNative) QueryPerformanceCounter(&currentFrameTime);
 
-		if (softToggle 
+		if (softToggle.load()
 			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
@@ -382,10 +383,10 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		if (!softToggle || actualDelta) {
+		if (!softToggle.load() || actualDelta) {
 			std::string text;
 
-			if (softToggle && actualDelta) text = "PB";
+			if (softToggle.load() && actualDelta) text = "PB";
 			else if (actualDelta) text = "CBF+PB";
 			else text = "CBF";
 
@@ -410,7 +411,7 @@ class $modify(CreatorLayer) {
 
 		DWORD waitResult = WaitForSingleObject(hMutex, 5);
 		if (waitResult == WAIT_OBJECT_0) {
-			if (static_cast<LinuxInputEvent*>(pBuf)[0].type == 3 && !softToggle) {
+			if (static_cast<LinuxInputEvent*>(pBuf)[0].type == 3 && !softToggle.load()) {
 				log::error("Linux input failed");
 				FLAlertLayer* popup = FLAlertLayer::create(
 					"CBF Linux", 
@@ -440,7 +441,7 @@ class $modify(GJGameLevel) {
 			|| this->m_stars == 0
 		);
 
-		if (!safeMode || softToggle) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
+		if (!safeMode || softToggle.load()) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
 	}
 };
 
@@ -460,7 +461,7 @@ void toggleMod(bool disable) {
 	
 	VirtualProtect(addr, 4, oldProtect, &newProtect);
 
-	softToggle = disable;
+	softToggle.store(disable);
 }
 
 HANDLE gdMutex;

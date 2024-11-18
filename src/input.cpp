@@ -145,6 +145,10 @@ void inputThread() {
 	MSG msg;
 	while (GetMessage(&msg, hwnd, 0, 0)) {
 		DispatchMessage(&msg);
+		while (softToggle.load()) { // reduce lag while mod is disabled
+			Sleep(2000);
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
+		}
 	}
 }
 
