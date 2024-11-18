@@ -34,7 +34,7 @@ HANDLE hMutex = NULL;
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
-bool isLinux = false;
+bool linuxNative = false;
 bool lateCutoff;
 
 void updateInputQueueAndTime(int stepCount) {
@@ -52,7 +52,7 @@ void updateInputQueueAndTime(int stepCount) {
 		lastFrameTime = lastPhysicsFrameTime;
 		stepQueue = {}; // just in case
 
-		if (isLinux) {
+		if (linuxNative) {
 			GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime);
 			linuxCheckInputs();
 		}
@@ -199,7 +199,7 @@ class $modify(CCEGLView) {
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
 
-		if (!lateCutoff && !isLinux) QueryPerformanceCounter(&currentFrameTime);
+		if (!lateCutoff && !linuxNative) QueryPerformanceCounter(&currentFrameTime);
 
 		if (softToggle 
 			|| !GetFocus() // not in foreground
@@ -214,7 +214,7 @@ class $modify(CCEGLView) {
 
 			inputQueueCopy = {};
 
-			if (!isLinux) {
+			if (!linuxNative) {
 				std::lock_guard lock(inputQueueLock);
 				inputQueue = {};
 			}
@@ -460,6 +460,8 @@ void toggleMod(bool disable) {
 HANDLE gdMutex;
 
 $on_mod(Loaded) {
+	Mod::get()->setSavedValue<bool>("is-linux", false);
+
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
 
@@ -487,15 +489,18 @@ $on_mod(Loaded) {
 
 	HMODULE ntdll = GetModuleHandle("ntdll.dll");
 	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");
-	if (false && wghv) {
+	if (wghv) {
 		const char* sysname;
 		const char* release;
 		wghv(&sysname, &release);
 
 		std::string sys = sysname;
 		log::info("Wine {}", sys);
-		if (sys == "Linux") { // background raw keyboard input doesn't work in Wine
-            isLinux = true;
+
+		if (sys == "Linux") Mod::get()->setSavedValue<bool>("you-must-be-on-linux-to-change-this", true);
+		if (sys == "Linux" && Mod::get()->getSettingValue<bool>("wine-workaround")) { // background raw keyboard input doesn't work in Wine
+            linuxNative = true;
+			log::info("Linux native");
 
             hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]), "LinuxSharedMemory");
 			if (hSharedMem == NULL) {
@@ -548,5 +553,7 @@ $on_mod(Loaded) {
 		}
 	}
 
-	if (!isLinux) std::thread(inputThread).detach();
+	if (!linuxNative) {
+		std::thread(inputThread).detach();
+	}
 }

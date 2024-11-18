@@ -58,7 +58,6 @@ extern std::mutex keybindsLock;
 
 extern std::atomic<bool> enableRightClick;
 extern bool threadPriority;
-extern bool isLinux;
 
 constexpr size_t BUFFER_SIZE = 20;
 

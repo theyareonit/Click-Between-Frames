@@ -78,6 +78,18 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true
+		},
+		"linux": {
+			"name": "Linux",
+			"type": "title"
+		},
+		"wine-workaround": {
+			"name": "Wine Workaround",
+			"description": "Wine doesn't let you get keyboard input between frames, so this is a workaround. However, it may not work properly on some PCs.\n\nOnly disable if experiencing issues (and don't play with keyboard if you disable it).",
+			"type": "bool",
+			"default": true,
+			"requires-restart": true,
+			"enable-if": "saved:you-must-be-on-linux-to-change-this"
 		}
 	},
 	"links": {
