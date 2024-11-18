@@ -40,8 +40,7 @@ bool lateCutoff;
 void updateInputQueueAndTime(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
 	if (!playLayer 
-		|| GameManager::sharedState()->getEditorLayer() 
-		|| playLayer->m_player1->m_isDead) 
+		|| GameManager::sharedState()->getEditorLayer()) 
 	{
 		enableInput = true;
 		firstFrame = true;
@@ -112,8 +111,6 @@ void updateInputQueueAndTime(int stepCount) {
 }
 
 Step updateDeltaFactorAndInput() {
-	enableInput = false;
-
 	if (stepQueue.empty()) return EMPTY_STEP;
 
 	Step front = stepQueue.front();
@@ -253,11 +250,12 @@ class $modify(GJBaseGameLayer) {
 			
 			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
 
-			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
-			else {
-				skipUpdate = true;
+			if (pl->m_player1->m_isDead) {
 				enableInput = true;
+				firstFrame = true;
 			}
+			else if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
+			else skipUpdate = true;
 		}
 		
 		return modifiedDelta;
@@ -285,6 +283,8 @@ class $modify(PlayerObject) {
 
 		PlayerObject* p2 = pl->m_player2;
 		if (this == p2) return;
+
+		enableInput = false;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
 
@@ -487,7 +487,7 @@ $on_mod(Loaded) {
 
 	HMODULE ntdll = GetModuleHandle("ntdll.dll");
 	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");
-	if (wghv) {
+	if (false && wghv) {
 		const char* sysname;
 		const char* release;
 		wghv(&sysname, &release);
