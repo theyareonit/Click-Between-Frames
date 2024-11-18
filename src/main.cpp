@@ -4,7 +4,7 @@
 #include <algorithm>
 
 #include <Geode/Geode.hpp>
-#include <Geode/loader/SettingEvent.hpp>
+#include <Geode/loader/SettingV3.hpp>
 
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCEGLView.hpp>
@@ -167,7 +167,7 @@ void updateKeybinds() {
 	}
 }
 
-void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
+void newResetCollisionLog(PlayerObject* p) { // inlined in 2.2074...
 	(*(CCDictionary**)((char*)p + 0x5b0))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5b8))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5c0))->removeAllObjects();
@@ -212,8 +212,8 @@ class $modify(CCEGLView) {
 			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
-			|| (getChildOfType<PauseLayer>(par, 0))
-			|| (getChildOfType<EndLevelLayer>(playLayer, 0)))
+			|| (par->getChildByType<PauseLayer>(0))
+			|| (playLayer->getChildByType<EndLevelLayer>(0)))
 		{
 			firstFrame = true;
 			skipUpdate = true;
@@ -239,8 +239,8 @@ bool actualDelta;
 
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto& self) {
-		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
-		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MIN);
+		self.setHookPriority("GJBaseGameLayer::handleButton", Priority::VeryEarly);
+		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", Priority::VeryEarly);
 	}
 
 	void handleButton(bool down, int button, bool isPlayer1) {
