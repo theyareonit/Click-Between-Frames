@@ -2,8 +2,6 @@
 
 #include <limits>
 
-#include <Geode/loader/SettingV3.hpp>
-
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCEGLView.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
@@ -171,6 +169,37 @@ void newResetCollisionLog(PlayerObject* p) { // inlined in 2.2074...
 	*(long long*)((char*)p + 0x5d0) = -1;
 }
 
+double averageDelta = 0.0;
+
+bool legacyBypass;
+bool actualDelta;
+
+int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
+	if (!actualDelta || forceVanilla) { // vanilla
+		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from (delta * 240) / timewarp
+	}
+	else if (legacyBypass) { // 2.1
+		return std::round(std::max(4.0, delta * 240.0) / std::min(1.0f, timewarp));
+	}
+	else { // sorta just 2.2 but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
+		double animationInterval = CCDirector::sharedDirector()->getAnimationInterval();
+		averageDelta = (0.05 * delta) + (0.95 * averageDelta); // exponential moving average to detect lag/external fps caps
+		
+		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0);
+		bool laggingManyFrames = averageDelta - animationInterval > 0.0005;
+		
+		if (!laggingOneFrame && !laggingManyFrames) { // no stepcount variance when not lagging
+			return std::round(std::ceil((animationInterval * 240.0) - 0.0001) / std::min(1.0f, timewarp));
+		} 
+		else if (!laggingOneFrame) { // some variance but still smoothish
+			return std::round(std::ceil(averageDelta * 240.0) / std::min(1.0f, timewarp));
+		}
+		else { // need to catch up badly
+			return std::round(std::ceil(delta * 240.0) / std::min(1.0f, timewarp));
+		}
+	}
+}
+
 bool safeMode;
 
 class $modify(PlayLayer) {
@@ -235,7 +264,7 @@ class $modify(CCEGLView) {
 	}
 };
 
-bool actualDelta;
+UINT32 stepCount;
 
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto& self) {
@@ -255,7 +284,7 @@ class $modify(GJBaseGameLayer) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
 			if (actualDelta) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 			
-			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
+			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
 			if (pl->m_player1->m_isDead) {
 				enableInput = true;
@@ -264,6 +293,7 @@ class $modify(GJBaseGameLayer) {
 			else if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
 			else skipUpdate = true;
 		}
+		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true);
 		
 		return modifiedDelta;
 	}
@@ -445,7 +475,34 @@ class $modify(GJGameLevel) {
 	}
 };
 
-Patch* patch;
+Patch* pbPatch;
+
+void togglePhysicsBypass(bool enable) {
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x2322ca);
+	DWORD oldProtect;
+	DWORD newProtect = 0x40;
+	
+	VirtualProtect(addr, 4, newProtect, &oldProtect);
+
+	if (!pbPatch) {
+		geode::ByteVector bytes = { 0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 0x8b, 0x19 }; // could be 1 instruction if i was less lazy
+		UINT32* stepAddr = &stepCount;
+		for (int i = 0; i < 8; i++) { // for each byte in stepAddr
+			bytes[i + 2] = ((char*)&stepAddr)[i]; // replace the zeroes with the address of stepCount
+		}
+		log::info("Physics bypass patch: {} at {}", bytes, addr);
+		pbPatch = Mod::get()->patch(addr, bytes).unwrap();
+	}
+
+	if (enable) pbPatch->enable();
+	else pbPatch->disable();
+	
+	VirtualProtect(addr, 4, oldProtect, &newProtect);
+
+	actualDelta = enable;
+}
+
+Patch* modPatch;
 
 void toggleMod(bool disable) {
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
@@ -454,10 +511,10 @@ void toggleMod(bool disable) {
 	
 	VirtualProtect(addr, 4, newProtect, &oldProtect);
 
-	if (!patch) patch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
+	if (!modPatch) modPatch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
 
-	if (disable) patch->disable();
-	else patch->enable();
+	if (disable) modPatch->disable();
+	else modPatch->enable();
 	
 	VirtualProtect(addr, 4, oldProtect, &newProtect);
 
@@ -472,14 +529,17 @@ $on_mod(Loaded) {
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
 
+	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("actual-delta"));
+	listenForSettingChanges("actual-delta", togglePhysicsBypass);
+
+	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
+	listenForSettingChanges("bypass-mode", +[](std::string mode) {
+		legacyBypass = mode == "2.1";
+	});
+
 	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
 	listenForSettingChanges("safe-mode", +[](bool enable) {
 		safeMode = enable;
-	});
-
-	actualDelta = Mod::get()->getSettingValue<bool>("actual-delta");
-	listenForSettingChanges("actual-delta", +[](bool enable) {
-		actualDelta = enable;
 	});
 
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");

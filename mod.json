@@ -1,5 +1,5 @@
 {
-	"geode": "4.0.0-beta.1",
+	"geode": "4.0.0",
 	"gd": {
 		"win": "2.2074"
 	},
@@ -44,12 +44,6 @@
 			"type": "bool",
 			"default": false
 		},
-		"actual-delta": {
-			"name": "Physics Bypass",
-			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
-			"type": "bool",
-			"default": false
-		},
 		"right-click": {
 			"name": "Right Click P2",
 			"description": "Use right click for player 2 jump.",
@@ -64,7 +58,7 @@
 			"name": "Reduce Mouse Lag",
 			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
-			"default": true
+			"default": false
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
@@ -78,6 +72,23 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true
+		},
+		"physics-bypass": {
+			"name": "Physics Bypass",
+			"type": "title"
+		},
+		"actual-delta": {
+			"name": "Enable Physics Bypass",
+			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"type": "bool",
+			"default": false
+		},
+		"bypass-mode": {
+			"name": "Physics Bypass Mode",
+			"description": "2.2 mode means as few collision checks per frame as possible (with a minimum of 240 checks per second).\n\n2.1 mode means 4 collision checks per frame at 60fps or above",
+			"type": "string",
+			"one-of": ["2.2", "2.1"],
+			"default": "2.2"
 		},
 		"linux": {
 			"name": "Linux",
