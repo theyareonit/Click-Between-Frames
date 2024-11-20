@@ -184,6 +184,7 @@ int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
 	else { // sorta just 2.2 but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
 		double animationInterval = CCDirector::sharedDirector()->getAnimationInterval();
 		averageDelta = (0.05 * delta) + (0.95 * averageDelta); // exponential moving average to detect lag/external fps caps
+		if (averageDelta > animationInterval * 10) averageDelta = animationInterval * 10; 
 		
 		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0);
 		bool laggingManyFrames = averageDelta - animationInterval > 0.0005;
