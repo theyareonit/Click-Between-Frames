@@ -184,7 +184,7 @@ int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
 	else { // sorta just 2.2 but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
 		double animationInterval = CCDirector::sharedDirector()->getAnimationInterval();
 		averageDelta = (0.05 * delta) + (0.95 * averageDelta); // exponential moving average to detect lag/external fps caps
-		if (averageDelta > animationInterval * 10) averageDelta = animationInterval * 10; 
+		if (averageDelta > animationInterval * 10) averageDelta = animationInterval * 10; // dont let averageDelta get too high
 		
 		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0);
 		bool laggingManyFrames = averageDelta - animationInterval > 0.0005;
@@ -357,7 +357,7 @@ class $modify(PlayerObject) {
 				if (!step.endStep) {
 					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
-					else pl->checkCollisions(this, 0.25f, true);
+					else pl->checkCollisions(this, timeFactor, true);
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -372,7 +372,7 @@ class $modify(PlayerObject) {
 					if (!step.endStep) {
 						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
-						else pl->checkCollisions(p2, 0.25f, true);
+						else pl->checkCollisions(p2, timeFactor, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
