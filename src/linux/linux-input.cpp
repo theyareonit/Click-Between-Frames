@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <dirent.h>
 #include <sys/epoll.h>
+#include <sys/inotify.h>
 
 #include <iostream>
 #include <cstring>
@@ -15,14 +16,16 @@
 #include <array>
 
 struct __attribute__((packed)) LinuxInputEvent {
-	LARGE_INTEGER time;
-	USHORT type;
-	USHORT code;
-	int value;
+    LARGE_INTEGER time;
+    USHORT type;
+    USHORT code;
+    int value;
 };
 
 constexpr size_t BUFFER_SIZE = 20;
 constexpr int MAX_EVENTS = 10;
+
+#define INOTIFY_BUF_LEN     ( 1024 * ( (sizeof (struct inotify_event)) + 16 ) )
 
 std::atomic<bool> should_quit{false};
 
@@ -65,6 +68,8 @@ USHORT convert_scan_code(USHORT code) {
 DWORD WINAPI gd_watchdog(LPVOID) { // CreateProcess doesn't return a handle for linux-input.exe, so a job object to auto-close linux-input.exe isn't an option
     HANDLE gdMutex = OpenMutex(SYNCHRONIZE, FALSE, "CBFWatchdogMutex");
     if (gdMutex == NULL) {
+
+
         std::cerr << "[CBF] Failed to open mutex: " << GetLastError() << std::endl;
         should_quit.store(true);
         return 1;
@@ -75,17 +80,20 @@ DWORD WINAPI gd_watchdog(LPVOID) { // CreateProcess doesn't return a handle for 
     return 0;
 }
 
-int main() {
-    std::cerr << "[CBF] Linux input program started" << std::endl;
-    std::vector<struct libevdev*> devices;
+bool already_updating = false;
 
-    int epoll_fd = epoll_create1(0);
-    if (epoll_fd == -1) {
-        std::cerr << "[CBF] Failed to create epoll instance: " << strerror(errno) << std::endl;
-        return 1;
+int update_input_devices(std::vector<struct libevdev*> &devices, int &epoll_fd){
+
+    // Removes all input devices from the "devices" vector
+    for(int i = 0; i < devices.size(); i++){
+        int fd = libevdev_get_fd(devices[i]);
+        if (fd != -1) {
+            close(fd);
+            libevdev_free(devices[i]);
+        }
     }
+    devices.clear();
 
-    // New code to read all input devices
     const char* input_dir = "/dev/input";
     DIR* dir = opendir(input_dir);
     if (dir == nullptr) {
@@ -115,7 +123,7 @@ int main() {
             int bus = libevdev_get_id_bustype(dev);
             if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
                 devices.push_back(dev);
-                
+
                 epoll_event ev;
                 ev.events = EPOLLIN;
                 ev.data.ptr = dev;
@@ -125,16 +133,47 @@ int main() {
                     close(fd);
                     continue;
                 }
-                
-                std::cerr << "[CBF] Added device: " << path << std::endl;
             } else {
                 libevdev_free(dev);
                 close(fd);
             }
         }
     }
-
     closedir(dir);
+    return 0;
+
+}
+
+int main() {
+    std::cerr << "[CBF] Linux input program started" << std::endl;
+    std::vector<struct libevdev*> devices;
+
+    int epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+        std::cerr << "[CBF] Failed to create epoll instance: " << strerror(errno) << std::endl;
+        return 1;
+    }
+
+    // Start a non-blocking inotify instance
+    int inotify_fd = inotify_init1(IN_NONBLOCK);
+    if (inotify_fd < 0){
+        std::cerr << "[CBF] Failed to create inotify instance: " << strerror(errno) << std::endl;
+        return 1;
+    }
+    // Start an inotify watch and buffer
+    int inotify_watch = inotify_add_watch(inotify_fd, "/dev/input", IN_CREATE | IN_DELETE | IN_ATTRIB);
+    if (inotify_watch < 0){
+        std::cerr << "[CBF] Failed to create inotify watch: " << strerror(errno) << std::endl;
+        close(inotify_fd);
+        return 1;
+    }
+
+    char buffer[INOTIFY_BUF_LEN];
+
+    // Adds the input devices that are already present when the program starts
+    if(update_input_devices(devices, epoll_fd) > 0){
+        return 1;
+    }
 
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
@@ -183,7 +222,22 @@ int main() {
 
     epoll_event events[MAX_EVENTS];
 
+
     while (!should_quit.load()) {
+
+        // Checks if an input device was connected or disconnected, and updates the "devices" vector.
+        int inotify_len = read(inotify_fd, buffer, INOTIFY_BUF_LEN);
+        if(inotify_len > 0) {
+            std::cerr << "[CBF] Updating input devices..." << std::endl;
+            // Clear the buffer
+            memset(buffer, 0, inotify_len);
+
+            // Update the input devices
+            if(update_input_devices(devices, epoll_fd) > 0){
+                return 1;
+            }
+        }
+
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, 100);
         if (nfds == -1) {
             if (errno == EINTR) continue; // timeout
@@ -194,12 +248,20 @@ int main() {
         for (int n = 0; n < nfds; ++n) {
             struct libevdev* dev = static_cast<struct libevdev*>(events[n].data.ptr);
             struct input_event ev;
-            
+
             while (libevdev_has_event_pending(dev)) {
+
                 int rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
                 if (rc != -EAGAIN && rc != 0) {
-                    std::cerr << "[CBF] Error reading event: " << strerror(-rc) << std::endl;
-                    break;
+                    // Solves the "No such device" issue when an input device that was connected before the program started is disconnected.
+                    if (-rc == ENODEV){
+                        if(update_input_devices(devices, epoll_fd) > 0){
+                            return 1;
+                        }
+                    } else {
+                        std::cerr << "[CBF] Error reading event: " << strerror(-rc) << std::endl;
+                        break;
+                    }
                 }
                 if (ev.type == EV_KEY && ev.value != 2) { // Exclude autorepeat
                     LARGE_INTEGER time = convert_time(ev.time);
@@ -227,6 +289,8 @@ int main() {
                 }
             }
         }
+
+
     }
 
     for (auto dev : devices) {
@@ -236,7 +300,10 @@ int main() {
         close(fd);
     }
 
+    inotify_rm_watch(inotify_fd, inotify_watch);
     close(epoll_fd);
+    close(inotify_fd);
+
 
     UnmapViewOfFile(pBuf);
     CloseHandle(hSharedMem);
