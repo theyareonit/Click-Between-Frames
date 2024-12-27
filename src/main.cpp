@@ -292,7 +292,11 @@ class $modify(GJBaseGameLayer) {
 				firstFrame = true;
 			}
 			else if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
-			else skipUpdate = true;
+			else {
+				enableInput = true;
+				firstFrame = true;
+				skipUpdate = true;
+			}
 		}
 		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true);
 		
