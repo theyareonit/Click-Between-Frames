@@ -25,4 +25,4 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 
 Icon by alex/sincos.
 
-If you like the mod, please support me on [Stripe](https://donate.stripe.com/aEU14Eaw9cgiam4288)!
+If you like the mod, please consider [donating](https://donate.stripe.com/aEU14Eaw9cgiam4288)!

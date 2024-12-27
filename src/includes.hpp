@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include <Geode/Geode.hpp>
+#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 using namespace geode::prelude;
 
@@ -56,8 +57,9 @@ extern std::mutex inputQueueLock;
 extern std::mutex keybindsLock;
 
 extern std::atomic<bool> enableRightClick;
+extern std::atomic<bool> softToggle;
+
 extern bool threadPriority;
-extern bool isLinux;
 
 constexpr size_t BUFFER_SIZE = 20;
 

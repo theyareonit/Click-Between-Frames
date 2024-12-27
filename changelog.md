@@ -1,3 +1,13 @@
+# v1.3.0
+
+* Update to 2.2074
+* Enforce 240 steps/sec minimum for physics bypass, add 2.1 physics bypass mode
+* Add a toggle for native Linux input detection (please click on the information button for the setting before disabling it!)
+* Fix right click buffering before attempts on Windows (not fixed on Linux)
+* Improve performance when the mod is disabled
+* Reduce bugginess of the "Reduce Mouse Lag" option; also, it now works even with CBF disabled
+* Possibly fix an issue where the mod wouldn't properly detect when the player died
+
 # v1.2.3
 
 * Fix "Reduce Mouse Lag" option causing the game to pause

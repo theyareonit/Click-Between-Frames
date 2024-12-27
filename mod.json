@@ -1,9 +1,9 @@
 {
-	"geode": "3.8.1",
+	"geode": "4.1.1",
 	"gd": {
-		"win": "2.206"
+		"win": "2.2074"
 	},
-	"version": "v1.2.3",
+	"version": "v1.3.0",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -11,7 +11,7 @@
 	"dependencies": [
 		{
 			"id": "geode.custom-keybinds",
-			"version": ">=v1.6.0",
+			"version": ">=v1.10.0",
 			"importance": "required"
 		}
 	],
@@ -19,7 +19,7 @@
 		{
 			"id": "nytelyte.wave_trail_drag_fix",
 			"importance": "conflicting",
-			"version": "<=v1.1.6"
+			"version": "*"
 		}
 	],
 	"tags": [
@@ -44,12 +44,6 @@
 			"type": "bool",
 			"default": false
 		},
-		"actual-delta": {
-			"name": "Physics Bypass",
-			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
-			"type": "bool",
-			"default": false
-		},
 		"right-click": {
 			"name": "Right Click P2",
 			"description": "Use right click for player 2 jump.",
@@ -62,7 +56,7 @@
 		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
-			"description": "Reduce lag when using high polling rate mice.\nRequires CBF to be enabled.\nExperimental, may break things.",
+			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
 			"default": false
 		},
@@ -78,6 +72,35 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true
+		},
+		"physics-bypass": {
+			"name": "Physics Bypass",
+			"type": "title"
+		},
+		"actual-delta": {
+			"name": "Enable Physics Bypass",
+			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"type": "bool",
+			"default": false
+		},
+		"bypass-mode": {
+			"name": "Physics Bypass Mode",
+			"description": "2.2 mode means as few collision checks per frame as possible (with a minimum of 240 checks per second).\n\n2.1 mode means 4 collision checks per frame at 60fps or above",
+			"type": "string",
+			"one-of": ["2.2", "2.1"],
+			"default": "2.2"
+		},
+		"linux": {
+			"name": "Linux",
+			"type": "title"
+		},
+		"wine-workaround": {
+			"name": "Wine Workaround",
+			"description": "Wine doesn't let you get keyboard input between frames, so this is a workaround. However, it may not work properly on some PCs.\n\nOnly disable if experiencing issues (and don't play with keyboard if you disable it).",
+			"type": "bool",
+			"default": true,
+			"requires-restart": true,
+			"enable-if": "saved:you-must-be-on-linux-to-change-this"
 		}
 	},
 	"links": {

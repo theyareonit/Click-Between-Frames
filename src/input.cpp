@@ -86,6 +86,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
+
+				queueInMainThread([inputState]() {keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", !inputState).post();});
 			}
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
@@ -143,6 +145,10 @@ void inputThread() {
 	MSG msg;
 	while (GetMessage(&msg, hwnd, 0, 0)) {
 		DispatchMessage(&msg);
+		while (softToggle.load()) { // reduce lag while mod is disabled
+			Sleep(2000);
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
+		}
 	}
 }
 

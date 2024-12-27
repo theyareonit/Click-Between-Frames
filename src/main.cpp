@@ -1,10 +1,6 @@
 #include "includes.hpp"
 
 #include <limits>
-#include <algorithm>
-
-#include <Geode/Geode.hpp>
-#include <Geode/loader/SettingEvent.hpp>
 
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCEGLView.hpp>
@@ -13,8 +9,6 @@
 #include <Geode/modify/EndLevelLayer.hpp>
 #include <Geode/modify/CreatorLayer.hpp>
 #include <Geode/modify/GJGameLevel.hpp>
-
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 typedef void (*wine_get_host_version)(const char **sysname, const char **release);
 
@@ -25,6 +19,8 @@ constexpr Step EMPTY_STEP = Step{ EMPTY_INPUT, 1.0, true };
 
 std::queue<struct InputEvent> inputQueueCopy;
 std::queue<struct Step> stepQueue;
+
+std::atomic<bool> softToggle;
 
 InputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
 
@@ -38,14 +34,13 @@ HANDLE hMutex = NULL;
 bool firstFrame = true;
 bool skipUpdate = true;
 bool enableInput = false;
-bool isLinux = false;
+bool linuxNative = false;
 bool lateCutoff;
 
 void updateInputQueueAndTime(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
 	if (!playLayer 
-		|| GameManager::sharedState()->getEditorLayer() 
-		|| playLayer->m_player1->m_isDead) 
+		|| GameManager::sharedState()->getEditorLayer()) 
 	{
 		enableInput = true;
 		firstFrame = true;
@@ -57,7 +52,7 @@ void updateInputQueueAndTime(int stepCount) {
 		lastFrameTime = lastPhysicsFrameTime;
 		stepQueue = {}; // just in case
 
-		if (isLinux) {
+		if (linuxNative) {
 			GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime);
 			linuxCheckInputs();
 		}
@@ -116,8 +111,6 @@ void updateInputQueueAndTime(int stepCount) {
 }
 
 Step updateDeltaFactorAndInput() {
-	enableInput = false;
-
 	if (stepQueue.empty()) return EMPTY_STEP;
 
 	Step front = stepQueue.front();
@@ -167,7 +160,7 @@ void updateKeybinds() {
 	}
 }
 
-void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
+void newResetCollisionLog(PlayerObject* p) { // inlined in 2.2074...
 	(*(CCDictionary**)((char*)p + 0x5b0))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5b8))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5c0))->removeAllObjects();
@@ -176,7 +169,38 @@ void newResetCollisionLog(PlayerObject* p) { // inlined in 2.206...
 	*(long long*)((char*)p + 0x5d0) = -1;
 }
 
-bool softToggle; // cant just disable all hooks bc thatll cause a memory leak with inputQueue, may improve this in the future
+double averageDelta = 0.0;
+
+bool legacyBypass;
+bool actualDelta;
+
+int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
+	if (!actualDelta || forceVanilla) { // vanilla
+		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from (delta * 240) / timewarp
+	}
+	else if (legacyBypass) { // 2.1
+		return std::round(std::max(4.0, delta * 240.0) / std::min(1.0f, timewarp));
+	}
+	else { // sorta just 2.2 but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
+		double animationInterval = CCDirector::sharedDirector()->getAnimationInterval();
+		averageDelta = (0.05 * delta) + (0.95 * averageDelta); // exponential moving average to detect lag/external fps caps
+		if (averageDelta > animationInterval * 10) averageDelta = animationInterval * 10; // dont let averageDelta get too high
+		
+		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0);
+		bool laggingManyFrames = averageDelta - animationInterval > 0.0005;
+		
+		if (!laggingOneFrame && !laggingManyFrames) { // no stepcount variance when not lagging
+			return std::round(std::ceil((animationInterval * 240.0) - 0.0001) / std::min(1.0f, timewarp));
+		} 
+		else if (!laggingOneFrame) { // some variance but still smoothish
+			return std::round(std::ceil(averageDelta * 240.0) / std::min(1.0f, timewarp));
+		}
+		else { // need to catch up badly
+			return std::round(std::ceil(delta * 240.0) / std::min(1.0f, timewarp));
+		}
+	}
+}
+
 bool safeMode;
 
 class $modify(PlayLayer) {
@@ -187,7 +211,7 @@ class $modify(PlayLayer) {
 
 	void levelComplete() {
 		bool testMode = this->m_isTestMode;
-		if (safeMode && !softToggle) this->m_isTestMode = true;
+		if (safeMode && !softToggle.load()) this->m_isTestMode = true;
 
 		PlayLayer::levelComplete();
 
@@ -195,7 +219,7 @@ class $modify(PlayLayer) {
 	}
 
 	void showNewBest(bool p0, int p1, int p2, bool p3, bool p4, bool p5) {
-		if (!safeMode || softToggle) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
+		if (!safeMode || softToggle.load()) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
 	}
 };
 
@@ -206,14 +230,14 @@ class $modify(CCEGLView) {
 		PlayLayer* playLayer = PlayLayer::get();
 		CCNode* par;
 
-		if (!lateCutoff && !isLinux) QueryPerformanceCounter(&currentFrameTime);
+		if (!lateCutoff && !linuxNative) QueryPerformanceCounter(&currentFrameTime);
 
-		if (softToggle 
+		if (softToggle.load()
 			|| !GetFocus() // not in foreground
 			|| !playLayer 
 			|| !(par = playLayer->getParent()) 
-			|| (getChildOfType<PauseLayer>(par, 0))
-			|| (getChildOfType<EndLevelLayer>(playLayer, 0)))
+			|| (par->getChildByType<PauseLayer>(0))
+			|| (playLayer->getChildByType<EndLevelLayer>(0)))
 		{
 			firstFrame = true;
 			skipUpdate = true;
@@ -221,26 +245,32 @@ class $modify(CCEGLView) {
 
 			inputQueueCopy = {};
 
-			if (!isLinux) {
+			if (!linuxNative) {
 				std::lock_guard lock(inputQueueLock);
 				inputQueue = {};
 			}
 		}
-		else if (mouseFix && !skipUpdate) {
+		if (mouseFix && !skipUpdate) {
 			MSG msg;
-			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST + 1, WM_MOUSELAST, PM_REMOVE)); // clear mouse inputs from message queue
+			int index = 1;
+			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST + index, WM_MOUSELAST, PM_NOREMOVE)) { // check for mouse inputs in the queue
+				if (msg.message == WM_MOUSEMOVE || msg.message == WM_NCMOUSEMOVE) {
+					PeekMessage(&msg, NULL, WM_MOUSEFIRST + index, WM_MOUSELAST, PM_REMOVE); // remove mouse movements from queue
+				}
+				else index++;
+			}
 		}
 
 		CCEGLView::pollEvents();
 	}
 };
 
-bool actualDelta;
+UINT32 stepCount;
 
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto& self) {
-		self.setHookPriority("GJBaseGameLayer::handleButton", INT_MIN);
-		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", INT_MIN);
+		self.setHookPriority("GJBaseGameLayer::handleButton", Priority::VeryEarly);
+		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", Priority::VeryEarly);
 	}
 
 	void handleButton(bool down, int button, bool isPlayer1) {
@@ -255,14 +285,16 @@ class $modify(GJBaseGameLayer) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
 			if (actualDelta) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 			
-			const int stepCount = std::round(std::max(1.0, ((modifiedDelta * 60.0) / std::min(1.0f, timewarp)) * 4)); // not sure if this is different from (delta * 240) / timewarp
+			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
-			if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
-			else {
+			if (pl->m_player1->m_isDead) {
 				enableInput = true;
 				firstFrame = true;
 			}
+			else if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
+			else skipUpdate = true;
 		}
+		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true);
 		
 		return modifiedDelta;
 	}
@@ -289,6 +321,8 @@ class $modify(PlayerObject) {
 
 		PlayerObject* p2 = pl->m_player2;
 		if (this == p2) return;
+
+		enableInput = false;
 
 		bool isDual = pl->m_gameState.m_isDualMode;
 
@@ -323,7 +357,7 @@ class $modify(PlayerObject) {
 				if (!step.endStep) {
 					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
-					else pl->checkCollisions(this, 0.25f, true);
+					else pl->checkCollisions(this, timeFactor, true);
 					PlayerObject::updateRotation(newTimeFactor);
 					newResetCollisionLog(this);
 				}
@@ -338,7 +372,7 @@ class $modify(PlayerObject) {
 					if (!step.endStep) {
 						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
-						else pl->checkCollisions(p2, 0.25f, true);
+						else pl->checkCollisions(p2, timeFactor, true);
 						p2->updateRotation(newTimeFactor);
 						newResetCollisionLog(p2);
 					}
@@ -380,10 +414,10 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		if (!softToggle || actualDelta) {
+		if (!softToggle.load() || actualDelta) {
 			std::string text;
 
-			if (softToggle && actualDelta) text = "PB";
+			if (softToggle.load() && actualDelta) text = "PB";
 			else if (actualDelta) text = "CBF+PB";
 			else text = "CBF";
 
@@ -408,7 +442,7 @@ class $modify(CreatorLayer) {
 
 		DWORD waitResult = WaitForSingleObject(hMutex, 5);
 		if (waitResult == WAIT_OBJECT_0) {
-			if (static_cast<LinuxInputEvent*>(pBuf)[0].type == 3 && !softToggle) {
+			if (static_cast<LinuxInputEvent*>(pBuf)[0].type == 3 && !softToggle.load()) {
 				log::error("Linux input failed");
 				FLAlertLayer* popup = FLAlertLayer::create(
 					"CBF Linux", 
@@ -438,11 +472,38 @@ class $modify(GJGameLevel) {
 			|| this->m_stars == 0
 		);
 
-		if (!safeMode || softToggle) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
+		if (!safeMode || softToggle.load()) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
 	}
 };
 
-Patch* patch;
+Patch* pbPatch;
+
+void togglePhysicsBypass(bool enable) {
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x2322ca);
+	DWORD oldProtect;
+	DWORD newProtect = 0x40;
+	
+	VirtualProtect(addr, 4, newProtect, &oldProtect);
+
+	if (!pbPatch) {
+		geode::ByteVector bytes = { 0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 0x8b, 0x19 }; // could be 1 instruction if i was less lazy
+		UINT32* stepAddr = &stepCount;
+		for (int i = 0; i < 8; i++) { // for each byte in stepAddr
+			bytes[i + 2] = ((char*)&stepAddr)[i]; // replace the zeroes with the address of stepCount
+		}
+		log::info("Physics bypass patch: {} at {}", bytes, addr);
+		pbPatch = Mod::get()->patch(addr, bytes).unwrap();
+	}
+
+	if (enable) pbPatch->enable();
+	else pbPatch->disable();
+	
+	VirtualProtect(addr, 4, oldProtect, &newProtect);
+
+	actualDelta = enable;
+}
+
+Patch* modPatch;
 
 void toggleMod(bool disable) {
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
@@ -451,30 +512,35 @@ void toggleMod(bool disable) {
 	
 	VirtualProtect(addr, 4, newProtect, &oldProtect);
 
-	if (!patch) patch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
+	if (!modPatch) modPatch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
 
-	if (disable) patch->disable();
-	else patch->enable();
+	if (disable) modPatch->disable();
+	else modPatch->enable();
 	
 	VirtualProtect(addr, 4, oldProtect, &newProtect);
 
-	softToggle = disable;
+	softToggle.store(disable);
 }
 
 HANDLE gdMutex;
 
 $on_mod(Loaded) {
+	Mod::get()->setSavedValue<bool>("is-linux", false);
+
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
+
+	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("actual-delta"));
+	listenForSettingChanges("actual-delta", togglePhysicsBypass);
+
+	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
+	listenForSettingChanges("bypass-mode", +[](std::string mode) {
+		legacyBypass = mode == "2.1";
+	});
 
 	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
 	listenForSettingChanges("safe-mode", +[](bool enable) {
 		safeMode = enable;
-	});
-
-	actualDelta = Mod::get()->getSettingValue<bool>("actual-delta");
-	listenForSettingChanges("actual-delta", +[](bool enable) {
-		actualDelta = enable;
 	});
 
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
@@ -498,8 +564,11 @@ $on_mod(Loaded) {
 
 		std::string sys = sysname;
 		log::info("Wine {}", sys);
-		if (sys == "Linux") { // background raw keyboard input doesn't work in Wine
-            isLinux = true;
+
+		if (sys == "Linux") Mod::get()->setSavedValue<bool>("you-must-be-on-linux-to-change-this", true);
+		if (sys == "Linux" && Mod::get()->getSettingValue<bool>("wine-workaround")) { // background raw keyboard input doesn't work in Wine
+            linuxNative = true;
+			log::info("Linux native");
 
             hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]), "LinuxSharedMemory");
 			if (hSharedMem == NULL) {
@@ -552,5 +621,7 @@ $on_mod(Loaded) {
 		}
 	}
 
-	if (!isLinux) std::thread(inputThread).detach();
+	if (!linuxNative) {
+		std::thread(inputThread).detach();
+	}
 }
