@@ -170,7 +170,7 @@ int main() {
     while ((entry = readdir(dir)) != nullptr) {
         std::string filename(entry->d_name);
         if (filename.find("event") == 0) {
-            std::string path = std::string(input_dir) + "/" + filename;
+            std::string path = std::string(input_dir) + filename;
             add_input_device(path, epoll_fd, devices, devices_paths);
         }
     }
