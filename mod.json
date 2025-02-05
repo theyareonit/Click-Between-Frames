@@ -1,9 +1,9 @@
 {
-	"geode": "4.0.0",
+	"geode": "4.2.0",
 	"gd": {
 		"win": "2.2074"
 	},
-	"version": "v1.3.0",
+	"version": "v1.3.1",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -108,7 +108,8 @@
 	},
 	"resources": {
 		"files": [
-			"resources/linux-input.exe.so"
+			"resources/linux-input.exe.so",
+			"resources/freebsd-input.exe.so"
 		]
 	}
 }

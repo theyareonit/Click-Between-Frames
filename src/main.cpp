@@ -565,12 +565,14 @@ $on_mod(Loaded) {
 		std::string sys = sysname;
 		log::info("Wine {}", sys);
 
-		if (sys == "Linux") Mod::get()->setSavedValue<bool>("you-must-be-on-linux-to-change-this", true);
-		if (sys == "Linux" && Mod::get()->getSettingValue<bool>("wine-workaround")) { // background raw keyboard input doesn't work in Wine
-            linuxNative = true;
+		const bool isLinux = sys == "Linux" || sys == "FreeBSD"; // FreeBSD isn't actually linux but it can run linux executables
+
+		if (isLinux) Mod::get()->setSavedValue<bool>("you-must-be-on-linux-to-change-this", true);
+		if (isLinux && Mod::get()->getSettingValue<bool>("wine-workaround")) { // background raw keyboard input doesn't work in Wine
+			linuxNative = true;
 			log::info("Linux native");
 
-            hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]), "LinuxSharedMemory");
+			hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]), "LinuxSharedMemory");
 			if (hSharedMem == NULL) {
 				log::error("Failed to create file mapping: {}", GetLastError());
 				return;
@@ -578,10 +580,10 @@ $on_mod(Loaded) {
 
 			pBuf = MapViewOfFile(hSharedMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(LinuxInputEvent[BUFFER_SIZE]));
 			if (pBuf == NULL) {
-        		log::error("Failed to map view of file: {}", GetLastError());
+				log::error("Failed to map view of file: {}", GetLastError());
 				CloseHandle(hSharedMem);
-        		return;
-    		}
+				return;
+			}
 
 			hMutex = CreateMutex(NULL, FALSE, "CBFLinuxMutex");
 			if (hMutex == NULL) {
@@ -609,7 +611,13 @@ $on_mod(Loaded) {
 			si.cb = sizeof(si);
 			ZeroMemory(&pi, sizeof(pi));
 
-			std::string path = CCFileUtils::get()->fullPathForFilename("linux-input.exe.so"_spr, true);
+			const char* inputlib = "linux-input.exe.so"_spr;
+			// Workaround because linux version fails to load (newer glibc than in provided rocky linux 9 + something else, lazy to discover)
+			// Anyway faster version
+			if (sys == "FreeBSD")
+				inputlib = "freebsd-input.exe.so"_spr;
+
+			std::string path = CCFileUtils::get()->fullPathForFilename(inputlib, true);
 
 			if (!CreateProcess(path.c_str(), NULL, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
 				log::error("Failed to launch Linux input program: {}", GetLastError());

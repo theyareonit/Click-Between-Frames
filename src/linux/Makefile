@@ -4,11 +4,22 @@
 ### /usr/bin/winemaker -iws2_32 -ievdev . --single-target linux-input
 
 
+ifeq ($(shell uname),FreeBSD)
+# pkg install libepoll-shim libevdev
+CXXFLAGS=-I/usr/local/include/libepoll-shim
+LDFLAGS=-lepoll-shim
+OS=freebsd
+
+else
+OS=linux
+endif
+
+
 SRCDIR                = .
 SUBDIRS               =
 DLLS                  =
 LIBS                  =
-EXES                  = linux-input
+EXES                  = $(OS)-input
 
 
 
@@ -28,7 +39,7 @@ LIBRARIES             =
 
 ### linux-input sources and settings
 
-linux_input_MODULE    = linux-input
+linux_input_MODULE    = $(OS)-input
 linux_input_C_SRCS    =
 linux_input_CXX_SRCS  = linux-input.cpp
 linux_input_RC_SRCS   =
@@ -107,6 +118,6 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH) $(DLL_IMPORTS:%=-l%)
 
 $(linux_input_MODULE): $(linux_input_OBJS)
-	$(CXX) $(linux_input_LDFLAGS) -o $@ $(linux_input_OBJS) $(linux_input_LIBRARY_PATH) $(linux_input_DLL_PATH) $(DEFLIB) $(linux_input_DLLS:%=-l%) $(linux_input_LIBRARIES:%=-l%)
+	$(CXX) $(linux_input_LDFLAGS) $(LDFLAGS) -o $@ $(linux_input_OBJS) $(linux_input_LIBRARY_PATH) $(linux_input_DLL_PATH) $(DEFLIB) $(linux_input_DLLS:%=-l%) $(linux_input_LIBRARIES:%=-l%)
 
 
