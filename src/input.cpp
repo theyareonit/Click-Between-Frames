@@ -38,13 +38,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			QueryPerformanceCounter(&time);
 
 			USHORT vkey = raw->data.keyboard.VKey;
-			inputState = raw->data.keyboard.Flags & RI_KEY_BREAK;
+			inputState = raw->data.keyboard.Flags & RI_KEY_BREAK ? Release : Press;
 
 			if (vkey >= VK_NUMPAD0 && vkey <= VK_NUMPAD9) vkey -= 0x30; // make numpad numbers work with customkeybinds
 
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
-				if (!inputState) return 0;
+				if (inputState) return 0;
 				else heldInputs.erase(vkey);
 			}
 			
@@ -66,7 +66,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				}
 			}
 
-			if (!inputState) heldInputs.emplace(vkey);
+			if (inputState) heldInputs.emplace(vkey);
 			if (!shouldEmplace) return 0;
 
 			break;
@@ -87,7 +87,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
 
-				queueInMainThread([inputState]() {keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", !inputState).post();});
+				queueInMainThread([inputState]() {keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", inputState).post();});
 			}
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
@@ -147,7 +147,7 @@ void inputThread() {
 		DispatchMessage(&msg);
 		while (softToggle.load()) { // reduce lag while mod is disabled
 			Sleep(2000);
-			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
 		}
 	}
 }
@@ -157,7 +157,7 @@ void linuxCheckInputs() {
     if (waitResult == WAIT_OBJECT_0) {
         LinuxInputEvent* events = static_cast<LinuxInputEvent*>(pBuf);
         for (int i = 0; i < BUFFER_SIZE; i++) {
-			if (events[i].type == 0) break;
+			if (events[i].type == 0) break; // if there are no more events
 
 			InputEvent input;
 			bool player1 = true;

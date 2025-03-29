@@ -1,9 +1,9 @@
 {
-	"geode": "4.0.0",
+	"geode": "4.3.1",
 	"gd": {
 		"win": "2.2074"
 	},
-	"version": "v1.3.0",
+	"version": "v1.3.1",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
@@ -13,13 +13,6 @@
 			"id": "geode.custom-keybinds",
 			"version": ">=v1.10.0",
 			"importance": "required"
-		}
-	],
-	"incompatibilities": [
-		{
-			"id": "nytelyte.wave_trail_drag_fix",
-			"importance": "conflicting",
-			"version": "*"
 		}
 	],
 	"tags": [

@@ -19,8 +19,8 @@ enum GameAction : int {
 };
 
 enum State : bool {
-	Press = 0,
-	Release = 1
+	Release = 0,
+	Press = 1
 };
 
 struct __attribute__((packed)) LinuxInputEvent {

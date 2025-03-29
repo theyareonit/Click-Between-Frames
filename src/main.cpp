@@ -22,95 +22,93 @@ std::queue<struct Step> stepQueue;
 
 std::atomic<bool> softToggle;
 
-InputEvent nextInput = { 0, 0, PlayerButton::Jump, 0 };
+InputEvent nextInput = EMPTY_INPUT;
 
 LARGE_INTEGER lastFrameTime;
-LARGE_INTEGER lastPhysicsFrameTime;
 LARGE_INTEGER currentFrameTime;
 
 HANDLE hSharedMem = NULL;
 HANDLE hMutex = NULL;
 
-bool firstFrame = true;
-bool skipUpdate = true;
+bool firstFrame = true; // necessary to prevent accidental inputs at the start of the level or when unpausing
+bool skipUpdate = true; // true -> dont split steps during PlayerObject::update()
 bool enableInput = false;
 bool linuxNative = false;
-bool lateCutoff;
+bool lateCutoff; // false -> ignore inputs that happen after the start of the frame; true -> check for inputs at the latest possible moment
 
-void updateInputQueueAndTime(int stepCount) {
+/*
+this function copies over the inputQueue from the input thread and uses it to build a queue of physics steps
+based on when each input happened relative to the start of the frame
+(and also calculates the associated deltaTime multipliers for each step)
+*/
+void buildStepQueue(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
-	if (!playLayer 
-		|| GameManager::sharedState()->getEditorLayer()) 
-	{
-		enableInput = true;
-		firstFrame = true;
-		skipUpdate = true;
-		return;
+	nextInput = EMPTY_INPUT;
+	stepQueue = {}; // shouldnt be necessary, but just in case
+
+	if (linuxNative) {
+		GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime); // used instead of QPC to make it possible to convert between linux and windows timestamps
+		linuxCheckInputs();
 	}
 	else {
-		nextInput = EMPTY_INPUT;
-		lastFrameTime = lastPhysicsFrameTime;
-		stepQueue = {}; // just in case
+		std::lock_guard lock(inputQueueLock);
 
-		if (linuxNative) {
-			GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime);
-			linuxCheckInputs();
+		if (lateCutoff) { // copy all inputs in queue, use current time as the frame boundary
+			QueryPerformanceCounter(&currentFrameTime);
+			inputQueueCopy = inputQueue;
+			inputQueue = {};
 		}
-		else {
-			std::lock_guard lock(inputQueueLock);
-
-			if (lateCutoff) {
-				QueryPerformanceCounter(&currentFrameTime);
-				inputQueueCopy = inputQueue;
-				inputQueue = {};
-			}
-			else {
-				while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
-					inputQueueCopy.push(inputQueue.front());
-					inputQueue.pop();
-				}
-			}
-		}
-
-		lastPhysicsFrameTime = currentFrameTime;
-
-		if (!firstFrame) skipUpdate = false;
-		else {
-			skipUpdate = true;
-			firstFrame = false;
-			if (!lateCutoff) inputQueueCopy = {};
-			return;
-		}
-
-		LARGE_INTEGER deltaTime;
-		LARGE_INTEGER stepDelta;
-		deltaTime.QuadPart = currentFrameTime.QuadPart - lastFrameTime.QuadPart;
-		stepDelta.QuadPart = (deltaTime.QuadPart / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
-
-		for (int i = 0; i < stepCount; i++) {
-			double lastDFactor = 0.0;
-			while (true) {
-				InputEvent front;
-				bool empty = inputQueueCopy.empty();
-				if (!empty) front = inputQueueCopy.front();
-
-				if (!empty && front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) {
-					double dFactor = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart;
-					stepQueue.emplace(Step{ front, std::clamp(dFactor - lastDFactor, SMALLEST_FLOAT, 1.0), false });
-					inputQueueCopy.pop();
-					lastDFactor = dFactor;
-					continue;
-				}
-				else {
-					stepQueue.emplace(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - lastDFactor), true });
-					break;
-				}
+		else { // only copy inputs that happened before the start of the frame
+			while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
+				inputQueueCopy.push(inputQueue.front());
+				inputQueue.pop();
 			}
 		}
 	}
+
+	if (!firstFrame) skipUpdate = false;
+	else {
+		skipUpdate = true;
+		firstFrame = false;
+		lastFrameTime = currentFrameTime;
+		if (!lateCutoff) inputQueueCopy = {};
+		return;
+	}
+
+	LARGE_INTEGER deltaTime;
+	LARGE_INTEGER stepDelta;
+	deltaTime.QuadPart = currentFrameTime.QuadPart - lastFrameTime.QuadPart;
+	stepDelta.QuadPart = (deltaTime.QuadPart / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
+
+	for (int i = 0; i < stepCount; i++) { // for each physics step of the frame
+		double elapsedTime = 0.0;
+		while (true) { // while loop to account for multiple inputs on the same step
+			InputEvent front;
+			bool empty = inputQueueCopy.empty();
+			if (!empty) front = inputQueueCopy.front();
+			else break; // no more inputs this frame
+
+			if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) { // if the first input in the queue happened on the current step
+				double inputTime = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart; // proportion of step elapsed at the time the input was made
+				stepQueue.emplace(Step{ front, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
+				inputQueueCopy.pop();
+				elapsedTime = inputTime;
+			}
+			else break; // no more inputs this step, more later in the frame
+		}
+
+		stepQueue.emplace(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - elapsedTime), true });
+	}
+
+	lastFrameTime = currentFrameTime;
 }
 
-Step updateDeltaFactorAndInput() {
+/*
+return the first step in the queue,
+also check if an input happened on the previous step, if so run handleButton.
+tbh this doesnt need to be a separate function from the PlayerObject::update() hook
+*/
+Step popStepQueue() {
 	if (stepQueue.empty()) return EMPTY_STEP;
 
 	Step front = stepQueue.front();
@@ -120,7 +118,7 @@ Step updateDeltaFactorAndInput() {
 		PlayLayer* playLayer = PlayLayer::get();
 
 		enableInput = true;
-		playLayer->handleButton(!nextInput.inputState, (int)nextInput.inputType, nextInput.isPlayer1);
+		playLayer->handleButton(nextInput.inputState, (int)nextInput.inputType, nextInput.isPlayer1);
 		enableInput = false;
 	}
 
@@ -130,6 +128,9 @@ Step updateDeltaFactorAndInput() {
 	return front;
 }
 
+/*
+send list of keybinds to the input thread
+*/
 void updateKeybinds() {
 	std::array<std::unordered_set<size_t>, 6> binds;
 	std::vector<geode::Ref<keybinds::Bind>> v;
@@ -160,7 +161,10 @@ void updateKeybinds() {
 	}
 }
 
-void newResetCollisionLog(PlayerObject* p) { // inlined in 2.2074...
+/*
+"decompiled" version of PlayerObject::resetCollisionLog() since it's inlined in GD 2.2074 on Windows
+*/
+void decomp_resetCollisionLog(PlayerObject* p) {
 	(*(CCDictionary**)((char*)p + 0x5b0))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5b8))->removeAllObjects();
 	(*(CCDictionary**)((char*)p + 0x5c0))->removeAllObjects();
@@ -174,25 +178,29 @@ double averageDelta = 0.0;
 bool legacyBypass;
 bool actualDelta;
 
+/*
+determine the number of physics steps that happen on each frame, 
+need to rewrite the vanilla formula bc otherwise you'd have to use inline assembly to get the step count
+*/
 int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
-	if (!actualDelta || forceVanilla) { // vanilla
-		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from (delta * 240) / timewarp
+	if (!actualDelta || forceVanilla) { // vanilla 2.2
+		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from `(delta * 240) / timewarp` bc of float precision
 	}
-	else if (legacyBypass) { // 2.1
+	else if (legacyBypass) { // 2.1 physics bypass (same as vanilla 2.1)
 		return std::round(std::max(4.0, delta * 240.0) / std::min(1.0f, timewarp));
 	}
-	else { // sorta just 2.2 but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
+	else { // sorta just 2.2 + physics bypass but it doesnt allow below 240 steps/sec, also it smooths things out a bit when lagging
 		double animationInterval = CCDirector::sharedDirector()->getAnimationInterval();
 		averageDelta = (0.05 * delta) + (0.95 * averageDelta); // exponential moving average to detect lag/external fps caps
 		if (averageDelta > animationInterval * 10) averageDelta = animationInterval * 10; // dont let averageDelta get too high
 		
-		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0);
-		bool laggingManyFrames = averageDelta - animationInterval > 0.0005;
+		bool laggingOneFrame = animationInterval < delta - (1.0 / 240.0); // more than 1 step of lag on a single frame
+		bool laggingManyFrames = averageDelta - animationInterval > 0.0005; // average lag is >0.5ms
 		
 		if (!laggingOneFrame && !laggingManyFrames) { // no stepcount variance when not lagging
 			return std::round(std::ceil((animationInterval * 240.0) - 0.0001) / std::min(1.0f, timewarp));
 		} 
-		else if (!laggingOneFrame) { // some variance but still smoothish
+		else if (!laggingOneFrame) { // consistently low fps
 			return std::round(std::ceil(averageDelta * 240.0) / std::min(1.0f, timewarp));
 		}
 		else { // need to catch up badly
@@ -204,11 +212,13 @@ int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
 bool safeMode;
 
 class $modify(PlayLayer) {
+	// update keybinds when you enter a level
 	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
 		updateKeybinds();
 		return PlayLayer::init(level, useReplay, dontCreateObjects);
 	}
 
+	// disable progress in safe mode
 	void levelComplete() {
 		bool testMode = this->m_isTestMode;
 		if (safeMode && !softToggle.load()) this->m_isTestMode = true;
@@ -218,6 +228,7 @@ class $modify(PlayLayer) {
 		this->m_isTestMode = testMode;
 	}
 
+	// disable new best popup in safe mode
 	void showNewBest(bool p0, int p1, int p2, bool p3, bool p4, bool p5) {
 		if (!safeMode || softToggle.load()) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
 	}
@@ -232,12 +243,12 @@ class $modify(CCEGLView) {
 
 		if (!lateCutoff && !linuxNative) QueryPerformanceCounter(&currentFrameTime);
 
-		if (softToggle.load()
-			|| !GetFocus() // not in foreground
-			|| !playLayer 
-			|| !(par = playLayer->getParent()) 
-			|| (par->getChildByType<PauseLayer>(0))
-			|| (playLayer->getChildByType<EndLevelLayer>(0)))
+		if (softToggle.load() // CBF disabled
+			|| !GetFocus() // GD is minimized
+			|| !playLayer // not in level
+			|| !(par = playLayer->getParent()) // must be a real playLayer with a parent (for compatibility with mods that use a fake playLayer)
+			|| (par->getChildByType<PauseLayer>(0)) // if paused
+			|| (playLayer->getChildByType<EndLevelLayer>(0))) // if on endscreen
 		{
 			firstFrame = true;
 			skipUpdate = true;
@@ -245,12 +256,12 @@ class $modify(CCEGLView) {
 
 			inputQueueCopy = {};
 
-			if (!linuxNative) {
+			if (!linuxNative) { // clearing the queue isnt necessary on Linux since its fixed size anyway, but on windows memory leaks are possible
 				std::lock_guard lock(inputQueueLock);
 				inputQueue = {};
 			}
 		}
-		if (mouseFix && !skipUpdate) {
+		if (mouseFix && !skipUpdate) { // reduce lag with high polling rate mice by limiting the number of mouse movements per frame to 1
 			MSG msg;
 			int index = 1;
 			while (PeekMessage(&msg, NULL, WM_MOUSEFIRST + index, WM_MOUSELAST, PM_NOREMOVE)) { // check for mouse inputs in the queue
@@ -273,10 +284,12 @@ class $modify(GJBaseGameLayer) {
 		self.setHookPriority("GJBaseGameLayer::getModifiedDelta", Priority::VeryEarly);
 	}
 
+	// disable regular inputs while CBF is active
 	void handleButton(bool down, int button, bool isPlayer1) {
 		if (enableInput) GJBaseGameLayer::handleButton(down, button, isPlayer1);
 	}
 
+	// either use the modified delta to calculate the step count, or use the actual delta if physics bypass is enabled
 	float getModifiedDelta(float delta) {
 		float modifiedDelta = GJBaseGameLayer::getModifiedDelta(delta);
 
@@ -287,14 +300,15 @@ class $modify(GJBaseGameLayer) {
 			
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
-			if (pl->m_player1->m_isDead) {
+			if (pl->m_player1->m_isDead || GameManager::sharedState()->getEditorLayer()) {
 				enableInput = true;
+				skipUpdate = true;
 				firstFrame = true;
 			}
-			else if (modifiedDelta > 0.0) updateInputQueueAndTime(stepCount);
+			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
 			else skipUpdate = true;
 		}
-		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true);
+		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
 		
 		return modifiedDelta;
 	}
@@ -307,20 +321,20 @@ float rotationDelta;
 bool midStep = false;
 
 class $modify(PlayerObject) {
-	void update(float timeFactor) {
-
+	// split a single step based on the entries in stepQueue
+	void update(float stepDelta) {
 		PlayLayer* pl = PlayLayer::get();
 
 		if (skipUpdate 
 			|| !pl 
-			|| !(this == pl->m_player1 || this == pl->m_player2))
+			|| !(this == pl->m_player1 || this == pl->m_player2)) // for compatibility with mods like Globed
 		{
-			PlayerObject::update(timeFactor);
+			PlayerObject::update(stepDelta);
 			return;
 		}
 
 		PlayerObject* p2 = pl->m_player2;
-		if (this == p2) return;
+		if (this == p2) return; // do all of the logic during the P1 update for simplicity
 
 		enableInput = false;
 
@@ -339,7 +353,7 @@ class $modify(PlayerObject) {
 			|| p2->m_isDashing
 			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
 
-		p1Pos = PlayerObject::getPosition();
+		p1Pos = PlayerObject::getPosition(); // save for later to prevent desync with move triggers & some other issues
 		p2Pos = p2->getPosition();
 
 		Step step;
@@ -347,38 +361,38 @@ class $modify(PlayerObject) {
 		midStep = true;
 
 		do {
-			step = updateDeltaFactorAndInput();
+			step = popStepQueue();
 
-			const float newTimeFactor = timeFactor * step.deltaFactor;
-			rotationDelta = newTimeFactor;
+			const float substepDelta = stepDelta * step.deltaFactor;
+			rotationDelta = substepDelta;
 
 			if (p1NotBuffering) {
-				PlayerObject::update(newTimeFactor);
+				PlayerObject::update(substepDelta);
 				if (!step.endStep) {
 					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
-					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true);
-					else pl->checkCollisions(this, timeFactor, true);
-					PlayerObject::updateRotation(newTimeFactor);
-					newResetCollisionLog(this);
+					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true); // moving platforms will launch u really high if this is anything other than 0.0, idk why
+					else pl->checkCollisions(this, stepDelta, true); // slopes will launch you really high if the 2nd argument is lower than like 0.01, idk why
+					PlayerObject::updateRotation(substepDelta);
+					decomp_resetCollisionLog(this); // presumably this function clears the list of objects that the icon is touching, necessary for wave
 				}
 			}
-			else if (step.endStep) { // disable cbf for buffers, revert to click-on-steps mode 
-				PlayerObject::update(timeFactor);
+			else if (step.endStep) { // revert to click-on-steps mode when buffering to reduce bugs
+				PlayerObject::update(stepDelta);
 			}
 
 			if (isDual) {
 				if (p2NotBuffering) {
-					p2->update(newTimeFactor);
+					p2->update(substepDelta);
 					if (!step.endStep) {
 						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
 						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
-						else pl->checkCollisions(p2, timeFactor, true);
-						p2->updateRotation(newTimeFactor);
-						newResetCollisionLog(p2);
+						else pl->checkCollisions(p2, stepDelta, true);
+						p2->updateRotation(substepDelta);
+						decomp_resetCollisionLog(p2);
 					}
 				}
 				else if (step.endStep) {
-					p2->update(timeFactor);
+					p2->update(stepDelta);
 				}
 			}
 
@@ -388,13 +402,14 @@ class $modify(PlayerObject) {
 		midStep = false;
 	}
 
+	// this function was chosen to update m_lastPosition in just because it's called right at the end of the vanilla physics step loop
 	void updateRotation(float t) {
 		PlayLayer* pl = PlayLayer::get();
 		if (!skipUpdate && pl && this == pl->m_player1) {
-			PlayerObject::updateRotation(rotationDelta);
+			PlayerObject::updateRotation(rotationDelta); // perform the remaining rotation that was left incomplete in the PlayerObject::update() hook
 
-			if (p1Pos.x && !midStep) { // to happen only when GJBGL::update() calls updateRotation after an input
-				this->m_lastPosition = p1Pos;
+			if (p1Pos.x && !midStep) { // ==true only at the end of a step that an input happened on
+				this->m_lastPosition = p1Pos; // move triggers & spider get confused without this (iirc)
 				p1Pos.setPoint(NULL, NULL);
 			}
 		}
@@ -410,6 +425,9 @@ class $modify(PlayerObject) {
 	}
 };
 
+/*
+CBF/PB endscreen watermark
+*/
 class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
@@ -436,6 +454,9 @@ class $modify(EndLevelLayer) {
 
 LPVOID pBuf;
 
+/*
+notify the player if theres an issue with input on Linux
+*/
 class $modify(CreatorLayer) {
 	bool init() {
 		if (!CreatorLayer::init()) return false;
@@ -464,6 +485,9 @@ class $modify(CreatorLayer) {
 	} 
 };
 
+/*
+dont submit to leaderboards for rated levels
+*/
 class $modify(GJGameLevel) {
 	void savePercentage(int percent, bool p1, int clicks, int attempts, bool valid) {
 		valid = (
@@ -557,7 +581,7 @@ $on_mod(Loaded) {
 
 	HMODULE ntdll = GetModuleHandle("ntdll.dll");
 	wine_get_host_version wghv = (wine_get_host_version)GetProcAddress(ntdll, "wine_get_host_version");
-	if (wghv) {
+	if (wghv) { // if this function exists, the user is on Wine
 		const char* sysname;
 		const char* release;
 		wghv(&sysname, &release);
@@ -583,7 +607,7 @@ $on_mod(Loaded) {
         		return;
     		}
 
-			hMutex = CreateMutex(NULL, FALSE, "CBFLinuxMutex");
+			hMutex = CreateMutex(NULL, FALSE, "CBFLinuxMutex"); // used to gate access to the shared memory buffer for inputs
 			if (hMutex == NULL) {
 				log::error("Failed to create shared memory mutex: {}", GetLastError());
 				CloseHandle(hSharedMem);
