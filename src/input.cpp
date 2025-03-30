@@ -185,7 +185,7 @@ void linuxCheckInputs() {
             	}
 			}
 
-            input.inputState = !events[i].value;
+            input.inputState = events[i].value;
 			input.time = events[i].time;
             input.isPlayer1 = player1;
                 

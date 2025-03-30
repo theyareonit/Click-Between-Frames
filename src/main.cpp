@@ -39,7 +39,7 @@ bool lateCutoff; // false -> ignore inputs that happen after the start of the fr
 /*
 this function copies over the inputQueue from the input thread and uses it to build a queue of physics steps
 based on when each input happened relative to the start of the frame
-(and also calculates the associated deltaTime multipliers for each step)
+(and also calculates the associated stepDelta multipliers for each step)
 */
 void buildStepQueue(int stepCount) {
 	PlayLayer* playLayer = PlayLayer::get();
@@ -47,7 +47,7 @@ void buildStepQueue(int stepCount) {
 	stepQueue = {}; // shouldnt be necessary, but just in case
 
 	if (linuxNative) {
-		GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime); // used instead of QPC to make it possible to convert between linux and windows timestamps
+		GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime); // used instead of QPC to make it possible to convert between Linux and Windows timestamps
 		linuxCheckInputs();
 	}
 	else {
@@ -84,8 +84,7 @@ void buildStepQueue(int stepCount) {
 		double elapsedTime = 0.0;
 		while (true) { // while loop to account for multiple inputs on the same step
 			InputEvent front;
-			bool empty = inputQueueCopy.empty();
-			if (!empty) front = inputQueueCopy.front();
+			if (!inputQueueCopy.empty()) front = inputQueueCopy.front();
 			else break; // no more inputs this frame
 
 			if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) { // if the first input in the queue happened on the current step
@@ -256,7 +255,7 @@ class $modify(CCEGLView) {
 
 			inputQueueCopy = {};
 
-			if (!linuxNative) { // clearing the queue isnt necessary on Linux since its fixed size anyway, but on windows memory leaks are possible
+			if (!linuxNative) { // clearing the queue isnt necessary on Linux since its fixed size anyway, but on Windows memory leaks are possible
 				std::lock_guard lock(inputQueueLock);
 				inputQueue = {};
 			}
