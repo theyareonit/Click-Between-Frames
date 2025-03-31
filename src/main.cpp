@@ -46,23 +46,24 @@ void buildStepQueue(int stepCount) {
 	nextInput = EMPTY_INPUT;
 	stepQueue = {}; // shouldnt be necessary, but just in case
 
-	if (linuxNative) {
-		GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime); // used instead of QPC to make it possible to convert between Linux and Windows timestamps
-		linuxCheckInputs();
-	}
-	else {
-		std::lock_guard lock(inputQueueLock);
-
-		if (lateCutoff) { // copy all inputs in queue, use current time as the frame boundary
-			QueryPerformanceCounter(&currentFrameTime);
-			inputQueueCopy = inputQueue;
-			inputQueue = {};
+	if (lateCutoff) { // copy all inputs in queue, use current time as the frame boundary
+		if (linuxNative) {
+			GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime); // used instead of QPC to make it possible to convert between Linux and Windows timestamps
+			linuxCheckInputs();
 		}
-		else { // only copy inputs that happened before the start of the frame
-			while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
-				inputQueueCopy.push(inputQueue.front());
-				inputQueue.pop();
-			}
+		else QueryPerformanceCounter(&currentFrameTime);
+		
+		std::lock_guard lock(inputQueueLock);
+		inputQueueCopy = inputQueue;
+		inputQueue = {};
+	}
+	else { // only copy inputs that happened before the start of the frame
+		if (linuxNative) linuxCheckInputs();
+
+		std::lock_guard lock(inputQueueLock);
+		while (!inputQueue.empty() && inputQueue.front().time.QuadPart <= currentFrameTime.QuadPart) {
+			inputQueueCopy.push(inputQueue.front());
+			inputQueue.pop();
 		}
 	}
 
@@ -82,16 +83,15 @@ void buildStepQueue(int stepCount) {
 
 	for (int i = 0; i < stepCount; i++) { // for each physics step of the frame
 		double elapsedTime = 0.0;
-		while (true) { // while loop to account for multiple inputs on the same step
-			InputEvent front;
-			if (!inputQueueCopy.empty()) front = inputQueueCopy.front();
-			else break; // no more inputs this frame
+		while (!inputQueueCopy.empty()) { // while loop to account for multiple inputs on the same step
+			InputEvent front = inputQueueCopy.front();
 
 			if (front.time.QuadPart - lastFrameTime.QuadPart < stepDelta.QuadPart * (i + 1)) { // if the first input in the queue happened on the current step
 				double inputTime = static_cast<double>((front.time.QuadPart - lastFrameTime.QuadPart) % stepDelta.QuadPart) / stepDelta.QuadPart; // proportion of step elapsed at the time the input was made
 				stepQueue.emplace(Step{ front, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
 				inputQueueCopy.pop();
 				elapsedTime = inputTime;
+				//log::info("Input - t: {} cft: {} lft: {} id: {} dt: {} sd: {}", front.time.QuadPart, currentFrameTime.QuadPart, lastFrameTime.QuadPart, front.time.QuadPart - lastFrameTime.QuadPart, deltaTime.QuadPart, stepDelta.QuadPart);
 			}
 			else break; // no more inputs this step, more later in the frame
 		}
@@ -241,6 +241,7 @@ class $modify(CCEGLView) {
 		CCNode* par;
 
 		if (!lateCutoff && !linuxNative) QueryPerformanceCounter(&currentFrameTime);
+		else if (!lateCutoff) GetSystemTimePreciseAsFileTime((FILETIME*)&currentFrameTime);
 
 		if (softToggle.load() // CBF disabled
 			|| !GetFocus() // GD is minimized
@@ -632,7 +633,7 @@ $on_mod(Loaded) {
 			si.cb = sizeof(si);
 			ZeroMemory(&pi, sizeof(pi));
 
-			std::string path = CCFileUtils::get()->fullPathForFilename("linux-input.exe.so"_spr, true);
+			std::string path = CCFileUtils::get()->fullPathForFilename("linux-input.so"_spr, true);
 
 			if (!CreateProcess(path.c_str(), NULL, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
 				log::error("Failed to launch Linux input program: {}", GetLastError());

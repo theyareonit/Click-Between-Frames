@@ -189,7 +189,7 @@ void linuxCheckInputs() {
 			input.time = events[i].time;
             input.isPlayer1 = player1;
                 
-            inputQueueCopy.emplace(input);
+            inputQueue.emplace(input);
         }
 		ZeroMemory(events, sizeof(LinuxInputEvent[BUFFER_SIZE]));
         ReleaseMutex(hMutex);
