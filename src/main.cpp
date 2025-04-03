@@ -417,11 +417,15 @@ class $modify(PlayerObject) {
 			PlayerObject::updateRotation(rotationDelta);
 
 			if (p2Pos.x && !midStep) {
-				pl->m_player2->m_lastPosition = p2Pos;
+				this->m_lastPosition = p2Pos;
 				p2Pos.setPoint(NULL, NULL);
 			}
 		}
 		else PlayerObject::updateRotation(t);
+
+		if (actualDelta && pl && !midStep) {
+			pl->m_gameState.m_currentProgress = static_cast<int>(pl->m_gameState.m_levelTime * 240.0);
+		}
 	}
 };
 
