@@ -18,8 +18,8 @@
 #include "includes.hpp"
 
 TimestampType getCurrentTimestamp() {
-	// convert ns to ms
-	return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1'000'000;
+	// convert ns to μs
+	return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1'000;
 }
 
 @interface EAGLView : GEODE_MACOS(NSOpenGLView) GEODE_IOS(UIView)
@@ -39,7 +39,7 @@ struct TimestampSetter {
 #ifdef GEODE_IS_MACOS
 static IMP keyDownExecOIMP;
 void keyDownExec(EAGLView* self, SEL sel, NSEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&keyDownExec)>(keyDownExecOIMP)(self, sel, event);
@@ -47,7 +47,7 @@ void keyDownExec(EAGLView* self, SEL sel, NSEvent* event) {
 
 static IMP keyUpExecOIMP;
 void keyUpExec(EAGLView* self, SEL sel, NSEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&keyUpExec)>(keyUpExecOIMP)(self, sel, event);
@@ -55,7 +55,7 @@ void keyUpExec(EAGLView* self, SEL sel, NSEvent* event) {
 
 static IMP mouseDownExecOIMP;
 void mouseDownExec(EAGLView* self, SEL sel, NSEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&mouseDownExec)>(mouseDownExecOIMP)(self, sel, event);
@@ -63,7 +63,7 @@ void mouseDownExec(EAGLView* self, SEL sel, NSEvent* event) {
 
 static IMP mouseDraggedExecOIMP;
 void mouseDraggedExec(EAGLView* self, SEL sel, NSEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&mouseDraggedExec)>(mouseDraggedExecOIMP)(self, sel, event);
@@ -71,7 +71,7 @@ void mouseDraggedExec(EAGLView* self, SEL sel, NSEvent* event) {
 
 static IMP mouseUpExecOIMP;
 void mouseUpExec(EAGLView* self, SEL sel, NSEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&mouseUpExec)>(mouseUpExecOIMP)(self, sel, event);
@@ -81,7 +81,7 @@ void mouseUpExec(EAGLView* self, SEL sel, NSEvent* event) {
 #ifdef GEODE_IS_IOS
 static IMP touchesBeganOIMP;
 void touchesBegan(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&touchesBegan)>(touchesBeganOIMP)(self, sel, touches, event);
@@ -89,7 +89,7 @@ void touchesBegan(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
 
 static IMP touchesMovedOIMP;
 void touchesMoved(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&touchesMoved)>(touchesMovedOIMP)(self, sel, touches, event);
@@ -97,7 +97,7 @@ void touchesMoved(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
 
 static IMP touchesEndedOIMP;
 void touchesEnded(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&touchesEnded)>(touchesEndedOIMP)(self, sel, touches, event);
@@ -105,7 +105,7 @@ void touchesEnded(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
 
 static IMP touchesCancelledOIMP;
 void touchesCancelled(EAGLView* self, SEL sel, NSSet* touches, UIEvent* event) {
-	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000.0);
+	auto timestamp = static_cast<std::uint64_t>([event timestamp] * 1000000.0);
 	SET_TIMESTAMP(timestamp);
 
 	reinterpret_cast<decltype(&touchesCancelled)>(touchesCancelledOIMP)(self, sel, touches, event);

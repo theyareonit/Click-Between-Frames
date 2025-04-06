@@ -43,6 +43,7 @@ void JNICALL JNI_setNextInputTimestamp(JNIEnv* env, jobject, jlong timestamp) {
 TimestampType getCurrentTimestamp() {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
+	// time as μs
 	return (now.tv_sec * 1'000'000) + (now.tv_nsec / 1'000);
 }
 
