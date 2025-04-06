@@ -66,7 +66,7 @@ void buildStepQueue(int stepCount) {
 			linuxCheckInputs();
 		}
 		#endif
-		
+
 		std::lock_guard lock(inputQueueLock);
 		inputQueueCopy = inputQueue;
 		inputQueue = {};
@@ -312,7 +312,7 @@ class $modify(CCEGLView) {
 class $modify(CCScheduler) {
 	void update(float dt) {
 		onFrameStart();
-		
+
 		CCScheduler::update(dt);
 	}
 };
@@ -557,22 +557,19 @@ void togglePhysicsBypass(bool enable) {
 #endif
 }
 
-Patch* modPatch;
 
 void toggleMod(bool disable) {
-#ifdef GEODE_IS_WINDOWS
-	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x5ec8e8);
-	DWORD oldProtect;
-	DWORD newProtect = 0x40;
+#if defined(GEODE_IS_WINDOWS) || defined(GEODE_IS_ANDROID64)
+	void* addr = reinterpret_cast<void*>(geode::base::get() + GEODE_WINDOWS(0x607230) GEODE_ANDROID64(0x5c00d0));
 
-	VirtualProtect(addr, 4, newProtect, &oldProtect);
-
+	static Patch* modPatch = nullptr;
 	if (!modPatch) modPatch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
 
-	if (disable) modPatch->disable();
-	else modPatch->enable();
-
-	VirtualProtect(addr, 4, oldProtect, &newProtect);
+	if (disable) {
+		(void) modPatch->disable();
+	} else {
+		(void) modPatch->enable();
+	}
 #endif
 
 	softToggle.store(disable);
