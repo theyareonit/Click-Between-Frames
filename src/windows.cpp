@@ -222,11 +222,11 @@ void linuxCheckInputs() {
 				}
 			}
 
-			input.inputState = !events[i].value;
+			input.inputState = events[i].value;
 			input.time = timestampFromLarge(events[i].time);
 			input.isPlayer1 = player1;
 
-			inputQueueCopy.emplace_back(input);
+			inputQueue.emplace_back(input);
 		}
 		ZeroMemory(events, sizeof(LinuxInputEvent[BUFFER_SIZE]));
 		ReleaseMutex(hMutex);
