@@ -40,6 +40,12 @@
 			"type": "bool",
 			"default": false
 		},
+		"click-on-steps": {
+			"name": "Click on Steps",
+			"description": "Only register inputs with 240TPS precision. Should have identical physics to vanilla.",
+			"type": "bool",
+			"default": false
+		},
 		"right-click": {
 			"name": "Right Click P2",
 			"description": "Use right click for player 2 jump.",

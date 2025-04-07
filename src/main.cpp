@@ -39,7 +39,6 @@ bool enableInput = false;
 bool linuxNative = false;
 bool lateCutoff; // false -> ignore inputs that happen after the start of the frame; true -> check for inputs at the latest possible moment
 
-
 std::array<std::unordered_set<size_t>, 6> inputBinds;
 std::unordered_set<uint16_t> heldInputs;
 
@@ -91,7 +90,6 @@ void buildStepQueue(int stepCount) {
 		if (!lateCutoff) inputQueueCopy = {};
 		return;
 	}
-
 
 	TimestampType deltaTime = currentFrameTime - lastFrameTime;
 	TimestampType stepDelta = (deltaTime / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
@@ -318,7 +316,6 @@ class $modify(CCScheduler) {
 };
 #endif
 
-
 int stepCount;
 
 class $modify(GJBaseGameLayer) {
@@ -375,6 +372,7 @@ CCPoint p1Pos = { 0.f, 0.f };
 CCPoint p2Pos = { 0.f, 0.f };
 
 float rotationDelta;
+bool clickOnSteps = false;
 bool midStep = false;
 
 class $modify(PlayerObject) {
@@ -423,7 +421,7 @@ class $modify(PlayerObject) {
 			const float substepDelta = stepDelta * step.deltaFactor;
 			rotationDelta = substepDelta;
 
-			if (p1NotBuffering) {
+			if (p1NotBuffering && !clickOnSteps) {
 				PlayerObject::update(substepDelta);
 				if (!step.endStep) {
 					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
@@ -438,7 +436,7 @@ class $modify(PlayerObject) {
 			}
 
 			if (isDual) {
-				if (p2NotBuffering) {
+				if (p2NotBuffering && !clickOnSteps) {
 					p2->update(substepDelta);
 					if (!step.endStep) {
 						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
@@ -497,8 +495,10 @@ class $modify(EndLevelLayer) {
 			std::string text;
 
 			if (softToggle.load() && physicsBypass) text = "PB";
-			else if (physicsBypass) text = "CBF+PB";
-			else text = "CBF";
+			else if (physicsBypass && !clickOnSteps) text = "CBF+PB";
+			else if (!clickOnSteps) text = "CBF";
+			else if (physicsBypass) text = "COS+PB";
+			else text = "COS";
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
 			CCLabelBMFont* indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
@@ -519,8 +519,8 @@ dont submit to leaderboards for rated levels
 class $modify(GJGameLevel) {
 	void savePercentage(int percent, bool p1, int clicks, int attempts, bool valid) {
 		valid = (
-			Mod::get()->getSettingValue<bool>("soft-toggle")
-			&& !Mod::get()->getSettingValue<bool>("actual-delta")
+			softToggle.load() && !physicsBypass	
+			|| clickOnSteps && !physicsBypass
 			|| this->m_stars == 0
 		);
 
@@ -571,7 +571,6 @@ void toggleMod(bool disable) {
 	softToggle.store(disable);
 }
 
-
 $on_mod(Loaded) {
 	Mod::get()->setSavedValue<bool>("is-linux", false);
 
@@ -589,6 +588,11 @@ $on_mod(Loaded) {
 	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
 	listenForSettingChanges("safe-mode", +[](bool enable) {
 		safeMode = enable;
+	});
+
+	clickOnSteps = Mod::get()->getSettingValue<bool>("click-on-steps");
+	listenForSettingChanges("click-on-steps", +[](bool enable) {
+		clickOnSteps = enable;
 	});
 
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
