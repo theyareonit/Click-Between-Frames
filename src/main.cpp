@@ -478,7 +478,7 @@ class $modify(PlayerObject) {
 		}
 		else PlayerObject::updateRotation(t);
 
-		if (physicsBypass && pl && !midStep) {
+		if (physicsBypass && pl && !midStep) { // fix percent calculation with physics bypass on 2.2 levels
 			pl->m_gameState.m_currentProgress = static_cast<int>(pl->m_gameState.m_levelTime * 240.0);
 		}
 	}

@@ -18,6 +18,12 @@
 			"platforms": ["win"]
 		}
 	},
+	"incompatibilities": {
+		"zmx.cbf-lite": {
+			"importance": "breaking",
+			"version": "*"
+		}
+	},
 	"tags": [
 		"performance",
 		"gameplay",
