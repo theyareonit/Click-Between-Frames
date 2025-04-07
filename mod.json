@@ -24,7 +24,7 @@
 		"enhancement"
 	],
 	"settings": {
-		"functionality": {
+		"functionality-category": {
 			"name": "Functionality",
 			"type": "title"
 		},
@@ -47,7 +47,7 @@
 			"default": false,
 			"platforms": ["win"]
 		},
-		"performance": {
+		"performance-category": {
 			"name": "Performance",
 			"type": "title",
 			"platforms": ["win"]
@@ -74,12 +74,12 @@
 			"requires-restart": true,
 			"platforms": ["win"]
 		},
-		"physics-bypass": {
+		"pb-category": {
 			"name": "Physics Bypass",
 			"type": "title",
 			"platforms": ["win"]
 		},
-		"actual-delta": {
+		"physics-bypass": {
 			"name": "Enable Physics Bypass",
 			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
@@ -94,7 +94,7 @@
 			"default": "2.2",
 			"platforms": ["win"]
 		},
-		"linux": {
+		"linux-category": {
 			"name": "Linux",
 			"type": "title",
 			"platforms": ["win"]

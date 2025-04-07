@@ -178,7 +178,7 @@ void updateKeybinds() {
 #endif
 
 /*
-"decompiled" version of PlayerObject::resetCollisionLog() since it's inlined in GD 2.2074 on Windows
+rewritten PlayerObject::resetCollisionLog() since it's inlined in GD 2.2074 on Windows
 */
 void decomp_resetCollisionLog(PlayerObject* p) {
 	p->m_collisionLogTop->removeAllObjects();
@@ -193,15 +193,15 @@ void decomp_resetCollisionLog(PlayerObject* p) {
 
 double averageDelta = 0.0;
 
+bool physicsBypass;
 bool legacyBypass;
-bool actualDelta;
 
 /*
 determine the number of physics steps that happen on each frame,
 need to rewrite the vanilla formula bc otherwise you'd have to use inline assembly to get the step count
 */
 int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
-	if (!actualDelta || forceVanilla) { // vanilla 2.2
+	if (!physicsBypass || forceVanilla) { // vanilla 2.2
 		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from `(delta * 240) / timewarp` bc of float precision
 	}
 	else if (legacyBypass) { // 2.1 physics bypass (same as vanilla 2.1)
@@ -337,7 +337,7 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (actualDelta) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (physicsBypass) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
@@ -349,7 +349,7 @@ class $modify(GJBaseGameLayer) {
 			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
 			else skipUpdate = true;
 		}
-		else if (actualDelta) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
+		else if (physicsBypass) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
 
 		return modifiedDelta;
 	}
@@ -480,7 +480,7 @@ class $modify(PlayerObject) {
 		}
 		else PlayerObject::updateRotation(t);
 
-		if (actualDelta && pl && !midStep) {
+		if (physicsBypass && pl && !midStep) {
 			pl->m_gameState.m_currentProgress = static_cast<int>(pl->m_gameState.m_levelTime * 240.0);
 		}
 	}
@@ -493,11 +493,11 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		if (!softToggle.load() || actualDelta) {
+		if (!softToggle.load() || physicsBypass) {
 			std::string text;
 
-			if (softToggle.load() && actualDelta) text = "PB";
-			else if (actualDelta) text = "CBF+PB";
+			if (softToggle.load() && physicsBypass) text = "PB";
+			else if (physicsBypass) text = "CBF+PB";
 			else text = "CBF";
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
@@ -528,16 +528,11 @@ class $modify(GJGameLevel) {
 	}
 };
 
-Patch* pbPatch = nullptr;
-
 void togglePhysicsBypass(bool enable) {
 #ifdef GEODE_IS_WINDOWS
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x2322ca);
-	DWORD oldProtect;
-	DWORD newProtect = 0x40;
 
-	VirtualProtect(addr, 4, newProtect, &oldProtect);
-
+	static Patch* pbPatch = nullptr;
 	if (!pbPatch) {
 		geode::ByteVector bytes = { 0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 0x8b, 0x19 }; // could be 1 instruction if i was less lazy
 		int* stepAddr = &stepCount;
@@ -548,15 +543,16 @@ void togglePhysicsBypass(bool enable) {
 		pbPatch = Mod::get()->patch(addr, bytes).unwrap();
 	}
 
-	if (enable) pbPatch->enable();
-	else pbPatch->disable();
+	if (enable) {
+		(void) pbPatch->enable();
+	} 
+	else  {
+		(void) pbPatch->disable();
+	}
 
-	VirtualProtect(addr, 4, oldProtect, &newProtect);
-
-	actualDelta = enable;
+	physicsBypass = enable;
 #endif
 }
-
 
 void toggleMod(bool disable) {
 #if defined(GEODE_IS_WINDOWS) || defined(GEODE_IS_ANDROID64)
@@ -582,8 +578,8 @@ $on_mod(Loaded) {
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges("soft-toggle", toggleMod);
 
-	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("actual-delta"));
-	listenForSettingChanges("actual-delta", togglePhysicsBypass);
+	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
+	listenForSettingChanges("physics-bypass", togglePhysicsBypass);
 
 	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
 	listenForSettingChanges("bypass-mode", +[](std::string mode) {
