@@ -1,4 +1,5 @@
 #include <libevdev-1.0/libevdev/libevdev.h> // thankfully this can be put before windows.h, it bugs otherwise
+#include <linux/input-event-codes.h>
 #include <windows.h> // winelib lets you use both windows and linux apis
 
 #include <fcntl.h>
@@ -6,6 +7,8 @@
 #include <signal.h>
 #include <dirent.h>
 #include <sys/epoll.h>
+#include <sys/inotify.h>
+#include <bits/stdc++.h>
 
 #include <iostream>
 #include <cstring>
@@ -15,14 +18,17 @@
 #include <array>
 
 struct __attribute__((packed)) LinuxInputEvent {
-	LARGE_INTEGER time;
-	USHORT type;
-	USHORT code;
-	int value;
+    LARGE_INTEGER time;
+    USHORT type;
+    USHORT code;
+    int value;
 };
 
 constexpr size_t BUFFER_SIZE = 20;
 constexpr int MAX_EVENTS = 10;
+
+#define INOTIFY_EVENT_SIZE  ( sizeof (struct inotify_event) )
+#define INOTIFY_BUF_LEN     ( 1024 * ( INOTIFY_EVENT_SIZE + 16 ) )
 
 std::atomic<bool> should_quit{false};
 
@@ -75,9 +81,70 @@ DWORD WINAPI gd_watchdog(LPVOID) { // CreateProcess doesn't return a handle for 
     return 0;
 }
 
+void add_input_device(std::string path, int epoll_fd, std::vector<struct libevdev*> &devices, std::vector<std::string> &devices_paths){
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd == -1) {
+        // We ignore errno if its 2 because when a device is disconnected, an IN_ATTRIB signal will still be sent,
+        // causing it to try to add the now deleted device. And we ignore errno 13 because it means that the IN_ATTRIB
+        // signal that we catched is not the right one and we can't access the device yet. More information below.
+        if(errno == 2 || errno == 13) return;
+        std::cerr << "[CBF] Failed to open " << path << ": " << strerror(errno) << std::endl;
+        return;
+    }
+
+    libevdev* dev = nullptr;
+    int rc = libevdev_new_from_fd(fd, &dev);
+    if (rc < 0) {
+        std::cerr << "[CBF] Failed to create evdev device for " << path << ": " << strerror(-rc) << std::endl;
+        close(fd);
+        return;
+    }
+
+    int bus = libevdev_get_id_bustype(dev);
+    if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
+        epoll_event ev;
+        ev.events = EPOLLIN;
+        ev.data.ptr = dev;
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+            std::cerr << "[CBF] Failed to add fd to epoll for " << path << ": " << strerror(errno) << std::endl;
+            libevdev_free(dev);
+            close(fd);
+            return;
+        }
+
+        devices.push_back(dev);
+        devices_paths.push_back(path);
+        std::cerr << "[CBF] Added device: " << path << std::endl;
+    } else {
+        libevdev_free(dev);
+        close(fd);
+    }
+}
+
+void remove_input_device(std::string path, std::vector<struct libevdev*> &devices, std::vector<std::string> &devices_paths){
+    auto finder = std::find(devices_paths.begin(), devices_paths.end(), path);
+    int index = std::distance(devices_paths.begin(), finder);
+    if(finder == devices_paths.end()){
+        std::cerr << "[CBF] Input device scheduled to be removed was not found." << std::endl;
+        return;
+    }
+
+    close(libevdev_get_fd(devices[index]));
+    libevdev_free(devices[index]);
+    devices.erase(devices.begin() + index);
+    devices_paths.erase(devices_paths.begin() + index);
+
+    std::cerr << "[CBF] Removed device: " << path << std::endl;
+}
+
 int main() {
     std::cerr << "[CBF] Linux input program started" << std::endl;
     std::vector<struct libevdev*> devices;
+    // To my knowledge, there is not a proper way to access a device's path using libevdev, so we need to store
+    // their paths in a separate vector.
+    std::vector<std::string> devices_paths;
+
+    const char* input_dir = "/dev/input/";
 
     int epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
@@ -85,55 +152,28 @@ int main() {
         return 1;
     }
 
-    // New code to read all input devices
-    const char* input_dir = "/dev/input";
-    DIR* dir = opendir(input_dir);
-    if (dir == nullptr) {
-        std::cerr << "[CBF] Failed to open directory " << input_dir << ": " << strerror(errno) << std::endl;
+    int inotify_fd = inotify_init1(IN_NONBLOCK);
+    if (inotify_fd < 0){
+        std::cerr << "[CBF] Failed to create inotify instance: " << strerror(errno) << std::endl;
         return 1;
     }
 
+    int inotify_watch = inotify_add_watch(inotify_fd, input_dir, IN_DELETE | IN_ATTRIB);
+    if(inotify_watch < 0){
+        std::cerr << "[CBF] Failed to create an inotify watch: " << strerror(errno) << std::endl;
+        return 1;
+    }
+    char inotify_buffer[INOTIFY_BUF_LEN];
+
+    DIR* dir = opendir(input_dir);
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         std::string filename(entry->d_name);
         if (filename.find("event") == 0) {
-            std::string path = std::string(input_dir) + "/" + filename;
-            int fd = open(path.c_str(), O_RDONLY);
-            if (fd == -1) {
-                std::cerr << "[CBF] Failed to open " << path << ": " << strerror(errno) << std::endl;
-                continue;
-            }
-
-            libevdev* dev = nullptr;
-            int rc = libevdev_new_from_fd(fd, &dev);
-            if (rc < 0) {
-                std::cerr << "[CBF] Failed to create evdev device for " << path << ": " << strerror(-rc) << std::endl;
-                close(fd);
-                continue;
-            }
-
-            int bus = libevdev_get_id_bustype(dev);
-            if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
-                devices.push_back(dev);
-                
-                epoll_event ev;
-                ev.events = EPOLLIN;
-                ev.data.ptr = dev;
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-                    std::cerr << "[CBF] Failed to add fd to epoll for " << path << ": " << strerror(errno) << std::endl;
-                    libevdev_free(dev);
-                    close(fd);
-                    continue;
-                }
-                
-                std::cerr << "[CBF] Added device: " << path << std::endl;
-            } else {
-                libevdev_free(dev);
-                close(fd);
-            }
+            std::string path = std::string(input_dir) + filename;
+            add_input_device(path, epoll_fd, devices, devices_paths);
         }
     }
-
     closedir(dir);
 
     signal(SIGINT, stop);
@@ -184,6 +224,39 @@ int main() {
     epoll_event events[MAX_EVENTS];
 
     while (!should_quit.load()) {
+
+        // Reads if there's an inotify event ready
+        int inotify_len = read(inotify_fd, inotify_buffer, INOTIFY_BUF_LEN);
+        if(inotify_len > 0){
+            int i = 0;
+
+            while(i < inotify_len){
+                struct inotify_event *event = ( struct inotify_event * ) &inotify_buffer[ i ];
+
+                if(event->len) {
+                    i+= INOTIFY_EVENT_SIZE + event->len;
+
+                    // Saves the current device path and name in a string and skips the loop if it's is not a keyboard
+                    std::string device_name = std::string(event->name);
+                    std::string path = std::string(input_dir) + device_name;
+                    if(device_name.find("event") != 0) continue;
+
+                    // This signal is sent whenever a file (in this case, device) attributes are modified.
+                    // We call the add_input_device function in here and not in IN_CREATE because we
+                    // cannot access the device inmediatly after creation, and we have to wait for the proper
+                    // IN_ATTRIB signal (it doesn't neccesarily have to be the first one).
+                    if(event->mask & IN_ATTRIB) {
+                        add_input_device(path, epoll_fd, devices, devices_paths);
+                    }
+                    // This is called when a device is disconnected. Before IN_DELETE is called, IN_ATTRIB is also
+                    // called, but we ignore that signal with the conditional found in add_input_device.
+                    else if(event->mask & IN_DELETE){
+                        remove_input_device(path, devices, devices_paths);
+                    }
+                }
+            }
+        }
+
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, 100);
         if (nfds == -1) {
             if (errno == EINTR) continue; // timeout
@@ -194,10 +267,14 @@ int main() {
         for (int n = 0; n < nfds; ++n) {
             struct libevdev* dev = static_cast<struct libevdev*>(events[n].data.ptr);
             struct input_event ev;
-            
+
             while (libevdev_has_event_pending(dev)) {
                 int rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
                 if (rc != -EAGAIN && rc != 0) {
+                    // Seems like even after removing the device, if there is a libevdev event pending
+                    // it will still try to access it, but that is not possible anymore.
+                    if (rc == -ENODEV) break;
+
                     std::cerr << "[CBF] Error reading event: " << strerror(-rc) << std::endl;
                     break;
                 }
@@ -237,6 +314,8 @@ int main() {
     }
 
     close(epoll_fd);
+    inotify_rm_watch(inotify_fd, inotify_watch);
+    close(inotify_fd);
 
     UnmapViewOfFile(pBuf);
     CloseHandle(hSharedMem);
@@ -245,3 +324,4 @@ int main() {
     std::cerr << "[CBF] Linux input program exiting" << std::endl;
     return 0;
 }
+
