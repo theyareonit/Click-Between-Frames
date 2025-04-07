@@ -1,13 +1,14 @@
 #pragma once
 
-#include <algorithm>
 #include <queue>
 #include <mutex>
 
 #include <Geode/Geode.hpp>
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 using namespace geode::prelude;
+
+using TimestampType = int64_t;
+TimestampType getCurrentTimestamp();
 
 enum GameAction : int {
 	p1Jump = 0,
@@ -23,15 +24,8 @@ enum State : bool {
 	Press = 1
 };
 
-struct __attribute__((packed)) LinuxInputEvent {
-	LARGE_INTEGER time;
-	USHORT type;
-	USHORT code;
-	int value;
-};
-
 struct InputEvent {
-	LARGE_INTEGER time;
+	TimestampType time;
 	PlayerButton inputType;
 	bool inputState;
 	bool isPlayer1;
@@ -43,25 +37,24 @@ struct Step {
 	bool endStep;
 };
 
-extern HANDLE hSharedMem;
-extern HANDLE hMutex;
-extern LPVOID pBuf;
-
-extern std::queue<struct InputEvent> inputQueue;
-extern std::queue<struct InputEvent> inputQueueCopy;
+extern std::deque<struct InputEvent> inputQueue;
+extern std::deque<struct InputEvent> inputQueueCopy;
 
 extern std::array<std::unordered_set<size_t>, 6> inputBinds;
-extern std::unordered_set<USHORT> heldInputs;
+extern std::unordered_set<uint16_t> heldInputs;
 
 extern std::mutex inputQueueLock;
 extern std::mutex keybindsLock;
 
 extern std::atomic<bool> enableRightClick;
+// true -> cbf disabled, confusing i know
 extern std::atomic<bool> softToggle;
 
 extern bool threadPriority;
 
-constexpr size_t BUFFER_SIZE = 20;
-
-void linuxCheckInputs();
-void inputThread();
+#if defined(GEODE_IS_WINDOWS)
+// some windows only global variables
+#include "windows.hpp"
+#else
+extern TimestampType pendingInputTimestamp;
+#endif
