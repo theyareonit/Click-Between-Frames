@@ -23,6 +23,13 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 - This mod does not work with bots
 - Controller input is not yet supported
 
+# Credits
+
 Icon by alex/sincos.
+
+Android & macOS code based off [Click on Steps by zmx](https://github.com/qimiko/click-on-steps), used with permission. \
+Android port by [mat](https://github.com/matcool), macOS port by [Jasmine](https://github.com/hiimjasmine00).
+
+---
 
 If you like the mod, please consider [donating](https://donate.stripe.com/aEU14Eaw9cgiam4288)!

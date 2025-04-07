@@ -1,27 +1,23 @@
 {
-	"geode": "4.0.0",
+	"geode": "4.3.1",
 	"gd": {
-		"win": "2.2074"
+		"win": "2.2074",
+		"android": "2.2074",
+		"mac": "2.2074",
+		"ios": "2.2074"
 	},
-	"version": "v1.3.0",
+	"version": "v1.3.1",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
 	"description": "Allows inputs to register between frames.",
-	"dependencies": [
-		{
-			"id": "geode.custom-keybinds",
+	"dependencies": {
+		"geode.custom-keybinds": {
+			"importance": "required",
 			"version": ">=v1.10.0",
-			"importance": "required"
+			"platforms": ["win"]
 		}
-	],
-	"incompatibilities": [
-		{
-			"id": "nytelyte.wave_trail_drag_fix",
-			"importance": "conflicting",
-			"version": "*"
-		}
-	],
+	},
 	"tags": [
 		"performance",
 		"gameplay",
@@ -48,51 +44,60 @@
 			"name": "Right Click P2",
 			"description": "Use right click for player 2 jump.",
 			"type": "bool",
-			"default": false
+			"default": false,
+			"platforms": ["win"]
 		},
 		"performance": {
 			"name": "Performance",
-			"type": "title"
+			"type": "title",
+			"platforms": ["win"]
 		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
 			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
-			"default": false
+			"default": false,
+			"platforms": ["win"]
 		},
 		"late-cutoff": {
 			"name": "Late Input Cutoff",
 			"description": "Check for inputs near the end of the frame instead of the start.\n\nSlightly reduces input lag, but also slightly hurts precision. May help if you are experiencing dropped or delayed inputs.",
 			"type": "bool",
-			"default": false
+			"default": false,
+			"platforms": ["win"]
 		},
 		"thread-priority": {
 			"name": "Thread Priority",
 			"description": "Whether to automatically set CBF's thread priority to the highest available.",
 			"type": "bool",
 			"default": true,
-			"requires-restart": true
+			"requires-restart": true,
+			"platforms": ["win"]
 		},
 		"physics-bypass": {
 			"name": "Physics Bypass",
-			"type": "title"
+			"type": "title",
+			"platforms": ["win"]
 		},
 		"actual-delta": {
 			"name": "Enable Physics Bypass",
 			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
-			"default": false
+			"default": false,
+			"platforms": ["win"]
 		},
 		"bypass-mode": {
 			"name": "Physics Bypass Mode",
 			"description": "2.2 mode means as few collision checks per frame as possible (with a minimum of 240 checks per second).\n\n2.1 mode means 4 collision checks per frame at 60fps or above",
 			"type": "string",
 			"one-of": ["2.2", "2.1"],
-			"default": "2.2"
+			"default": "2.2",
+			"platforms": ["win"]
 		},
 		"linux": {
 			"name": "Linux",
-			"type": "title"
+			"type": "title",
+			"platforms": ["win"]
 		},
 		"wine-workaround": {
 			"name": "Wine Workaround",
@@ -100,7 +105,8 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true,
-			"enable-if": "saved:you-must-be-on-linux-to-change-this"
+			"enable-if": "saved:you-must-be-on-linux-to-change-this",
+			"platforms": ["win"]
 		}
 	},
 	"links": {
@@ -108,7 +114,7 @@
 	},
 	"resources": {
 		"files": [
-			"resources/linux-input.exe.so"
+			"resources/linux-input.so"
 		]
 	}
 }

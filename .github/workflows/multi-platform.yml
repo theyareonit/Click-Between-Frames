@@ -15,16 +15,20 @@ jobs:
         - name: Windows
           os: windows-latest
 
-        #- name: macOS
-        #  os: macos-latest
+        - name: macOS
+          os: macos-latest
 
-        #- name: Android32
-        #  os: ubuntu-latest
-        #  target: Android32
+        # - name: iOS
+        #   os: macos-latest
+        #   target: iOS
 
-        #- name: Android64
-        #  os: ubuntu-latest
-        #  target: Android64
+        - name: Android32
+          os: ubuntu-latest
+          target: Android32
+
+        - name: Android64
+          os: ubuntu-latest
+          target: Android64
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
@@ -37,6 +41,7 @@ jobs:
         with:
           combine: true
           target: ${{ matrix.config.target }}
+          # sdk: nightly
 
   package:
     name: Package builds
