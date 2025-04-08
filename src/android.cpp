@@ -50,13 +50,23 @@ TimestampType getCurrentTimestamp() {
 #include <Geode/modify/CCTouchDispatcher.hpp>
 class $modify(CCTouchDispatcher) {
 	void touches(cocos2d::CCSet* touches, cocos2d::CCEvent* event, unsigned int index) {
-		if (index == CCTOUCHBEGAN || index == CCTOUCHENDED) {
-			// used in GJBaseGameLayer::queueButton hook
-			pendingInputTimestamp = lastTimestamp;
-			lastTimestamp = 0;
-		}
+		// used in GJBaseGameLayer::queueButton hook
+		pendingInputTimestamp = lastTimestamp;
+		lastTimestamp = 0;
 		CCTouchDispatcher::touches(touches, event, index);
 		pendingInputTimestamp = 0;
+	}
+};
+
+#include <Geode/modify/CCKeyboardDispatcher.hpp>
+class $modify(CCKeyboardDispatcher) {
+	bool dispatchKeyboardMSG(enumKeyCodes key, bool isKeyDown, bool isKeyRepeat) {
+		// used in GJBaseGameLayer::queueButton hook
+		pendingInputTimestamp = lastTimestamp;
+		lastTimestamp = 0;
+		bool r = CCKeyboardDispatcher::dispatchKeyboardMSG(key, isKeyDown, isKeyRepeat);
+		pendingInputTimestamp = 0;
+		return r;
 	}
 };
 
