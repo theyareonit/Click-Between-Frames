@@ -21,7 +21,7 @@
 	"incompatibilities": {
 		"zmx.cbf-lite": {
 			"importance": "breaking",
-			"version": "*"
+			"version": ">=1.0.0"
 		}
 	},
 	"tags": [
