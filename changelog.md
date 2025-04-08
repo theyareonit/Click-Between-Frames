@@ -1,3 +1,7 @@
+# v1.4.1
+
+* Fix keyboard input not working on Android
+
 # v1.4.0
 
 * Android & macOS support (thanks mat, Jasmine, and zmx!)
