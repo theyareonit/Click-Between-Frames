@@ -1,1 +1,1 @@
-Please support me through [Stripe](https://donate.stripe.com/aEU14Eaw9cgiam4288) if you enjoy the mod!
+Please support me through [PayPal](https://www.paypal.com/donate/?hosted_button_id=U2LWN9H395TF8) if you enjoy the mod!

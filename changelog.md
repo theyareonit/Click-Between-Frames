@@ -1,3 +1,12 @@
+# v1.4.0
+
+* Android & macOS support (thanks mat, Jasmine, and zmx!)
+* Added a "Click on Steps" mode in the mod settings
+* Fixed percentages with physics bypass on 2.2 levels
+* Fixed not being able to unplug/replug input devices on Linux without restarting GD (thanks keratomalacian!)
+* Allow disabling "Late Input Cutoff" on Linux
+* Significantly cleaned up code, added comments
+
 # v1.3.0
 
 * Update to 2.2074
