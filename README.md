@@ -1,6 +1,6 @@
 # Installation
 
-Install [Geode](https://geode-sdk.org/install/) for Windows, then install this mod from the Geode index.
+Install [Geode](https://geode-sdk.org/install/) on any platform, then install this mod from the Geode index.
 
 # What does it do
 
