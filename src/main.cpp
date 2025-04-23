@@ -82,8 +82,8 @@ void buildStepQueue(int stepCount) {
 		}
 	}
 
-	if (!firstFrame) skipUpdate = false;
-	else {
+	skipUpdate = false;
+	if (firstFrame) {
 		skipUpdate = true;
 		firstFrame = false;
 		lastFrameTime = currentFrameTime;
@@ -338,12 +338,12 @@ class $modify(GJBaseGameLayer) {
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
-			if (pl->m_player1->m_isDead || GameManager::sharedState()->getEditorLayer()) {
+			if (pl->m_playerDied || GameManager::sharedState()->getEditorLayer()) {
 				enableInput = true;
 				skipUpdate = true;
 				firstFrame = true;
 			}
-			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
+			else if (stepCount > 0) buildStepQueue(stepCount);
 			else skipUpdate = true;
 		}
 		else if (physicsBypass) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
@@ -373,17 +373,25 @@ CCPoint p2Pos = { 0.f, 0.f };
 
 float rotationDelta;
 bool clickOnSteps = false;
+bool p1Split = false;
+bool p2Split = false;
 bool midStep = false;
 
 class $modify(PlayerObject) {
 	// split a single step based on the entries in stepQueue
 	void update(float stepDelta) {
 		PlayLayer* pl = PlayLayer::get();
-
+		bool inputThisStep = stepQueue.empty() ? false : !stepQueue.front().endStep;
+		if (!stepQueue.empty() && !inputThisStep) stepQueue.pop_front();
+		if (!skipUpdate) enableInput = false;
+		
 		if (skipUpdate
+			|| !inputThisStep
 			|| !pl
 			|| !(this == pl->m_player1 || this == pl->m_player2)) // for compatibility with mods like Globed
 		{
+			p1Split = false;
+			p2Split = false;
 			PlayerObject::update(stepDelta);
 			return;
 		}
@@ -391,10 +399,7 @@ class $modify(PlayerObject) {
 		PlayerObject* p2 = pl->m_player2;
 		if (this == p2) return; // do all of the logic during the P1 update for simplicity
 
-		enableInput = false;
-
 		bool isDual = pl->m_gameState.m_isDualMode;
-
 		bool p1StartedOnGround = this->m_isOnGround;
 		bool p2StartedOnGround = p2->m_isOnGround;
 
@@ -411,32 +416,32 @@ class $modify(PlayerObject) {
 		p1Pos = PlayerObject::getPosition(); // save for later to prevent desync with move triggers & some other issues
 		p2Pos = p2->getPosition();
 
+		p1Split = !clickOnSteps && p1NotBuffering;
+		p2Split = !clickOnSteps && p2NotBuffering;
+		
 		Step step;
 		bool firstLoop = true;
 		midStep = true;
 
 		do {
 			step = popStepQueue();
-
 			const float substepDelta = stepDelta * step.deltaFactor;
 			rotationDelta = substepDelta;
-
-			if (p1NotBuffering && !clickOnSteps) {
+			
+			if (p1Split) {
 				PlayerObject::update(substepDelta);
 				if (!step.endStep) {
 					if (firstLoop && ((this->m_yVelocity < 0) ^ this->m_isUpsideDown)) this->m_isOnGround = p1StartedOnGround; // this fixes delayed inputs on platforms moving down for some reason
 					if (!this->m_isOnSlope || this->m_isDart) pl->checkCollisions(this, 0.0f, true); // moving platforms will launch u really high if this is anything other than 0.0, idk why
 					else pl->checkCollisions(this, stepDelta, true); // slopes will launch you really high if the 2nd argument is lower than like 0.01, idk why
 					PlayerObject::updateRotation(substepDelta);
-					decomp_resetCollisionLog(this); // presumably this function clears the list of objects that the icon is touching, necessary for wave
+					decomp_resetCollisionLog(this); // necessary for wave
 				}
 			}
-			else if (step.endStep) { // revert to click-on-steps mode when buffering to reduce bugs
-				PlayerObject::update(stepDelta);
-			}
+			else if (step.endStep) PlayerObject::update(stepDelta); // revert to click-on-steps mode when buffering to reduce bugs
 
 			if (isDual) {
-				if (p2NotBuffering && !clickOnSteps) {
+				if (p2Split) {
 					p2->update(substepDelta);
 					if (!step.endStep) {
 						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
@@ -446,9 +451,7 @@ class $modify(PlayerObject) {
 						decomp_resetCollisionLog(p2);
 					}
 				}
-				else if (step.endStep) {
-					p2->update(stepDelta);
-				}
+				else if (step.endStep) p2->update(stepDelta);
 			}
 
 			firstLoop = false;
@@ -460,21 +463,14 @@ class $modify(PlayerObject) {
 	// this function was chosen to update m_lastPosition in just because it's called right at the end of the vanilla physics step loop
 	void updateRotation(float t) {
 		PlayLayer* pl = PlayLayer::get();
-		if (!skipUpdate && pl && this == pl->m_player1) {
+		
+		if (pl && this == pl->m_player1 && p1Split && !midStep) {
 			PlayerObject::updateRotation(rotationDelta); // perform the remaining rotation that was left incomplete in the PlayerObject::update() hook
-
-			if (p1Pos.x && !midStep) { // ==true only at the end of a step that an input happened on
-				this->m_lastPosition = p1Pos; // move triggers & spider get confused without this (iirc)
-				p1Pos.setPoint(0.f, 0.f);
-			}
+			this->m_lastPosition = p1Pos; // move triggers & spider get confused without this (iirc)
 		}
-		else if (!skipUpdate && pl && this == pl->m_player2) {
+		else if (pl && this == pl->m_player2 && p2Split && !midStep) {
 			PlayerObject::updateRotation(rotationDelta);
-
-			if (p2Pos.x && !midStep) {
-				this->m_lastPosition = p2Pos;
-				p2Pos.setPoint(0.f, 0.f);
-			}
+			this->m_lastPosition = p2Pos;
 		}
 		else PlayerObject::updateRotation(t);
 
