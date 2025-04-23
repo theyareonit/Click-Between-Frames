@@ -1,3 +1,9 @@
+# v1.4.2
+
+* Slightly improve performance
+* Fix wrong rotation calculation in duals
+* Fix m_lastPosition being incorrectly set (probably fixes some bugs somewhere)
+
 # v1.4.1
 
 * Fix keyboard input not working on Android
