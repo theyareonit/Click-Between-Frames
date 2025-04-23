@@ -1,3 +1,7 @@
+# v1.4.4
+
+* Fix dual desync (oops)
+
 # v1.4.3
 
 * Fix dropped inputs (oops)

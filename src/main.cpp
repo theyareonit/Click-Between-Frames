@@ -372,6 +372,7 @@ CCPoint p1Pos = { 0.f, 0.f };
 CCPoint p2Pos = { 0.f, 0.f };
 
 float rotationDelta;
+bool inputThisStep = false;
 bool clickOnSteps = false;
 bool p1Split = false;
 bool p2Split = false;
@@ -381,24 +382,28 @@ class $modify(PlayerObject) {
 	// split a single step based on the entries in stepQueue
 	void update(float stepDelta) {
 		PlayLayer* pl = PlayLayer::get();
-		bool inputThisStep = stepQueue.empty() ? false : !stepQueue.front().endStep;
-		if (!stepQueue.empty() && !inputThisStep) stepQueue.pop_front();
 		if (!skipUpdate) enableInput = false;
 		
+		if (pl && this != pl->m_player1 || midStep) { // do all of the logic during the P1 update for simplicity
+			if (midStep || !inputThisStep || this != pl->m_player2) PlayerObject::update(stepDelta);
+			return; 
+		}
+
+		inputThisStep = stepQueue.empty() ? false : !stepQueue.front().endStep;
+		if (!stepQueue.empty() && !inputThisStep) stepQueue.pop_front();
+		
 		if (skipUpdate
-			|| !inputThisStep
 			|| !pl
-			|| !(this == pl->m_player1 || this == pl->m_player2)) // for compatibility with mods like Globed
+			|| !inputThisStep)
 		{
 			p1Split = false;
 			p2Split = false;
+			inputThisStep = false;
 			PlayerObject::update(stepDelta);
 			return;
 		}
 
 		PlayerObject* p2 = pl->m_player2;
-		if (this == p2) return; // do all of the logic during the P1 update for simplicity
-
 		bool isDual = pl->m_gameState.m_isDualMode;
 		bool p1StartedOnGround = this->m_isOnGround;
 		bool p2StartedOnGround = p2->m_isOnGround;
@@ -417,7 +422,7 @@ class $modify(PlayerObject) {
 		p2Pos = p2->getPosition();
 
 		p1Split = !clickOnSteps && p1NotBuffering;
-		p2Split = !clickOnSteps && p2NotBuffering;
+		p2Split = !clickOnSteps && p2NotBuffering && isDual;
 		
 		Step step;
 		bool firstLoop = true;
