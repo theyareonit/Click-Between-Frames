@@ -343,7 +343,7 @@ class $modify(GJBaseGameLayer) {
 				skipUpdate = true;
 				firstFrame = true;
 			}
-			else if (modifiedDelta > 0) buildStepQueue(stepCount);
+			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
 			else skipUpdate = true;
 		}
 		else if (physicsBypass) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
