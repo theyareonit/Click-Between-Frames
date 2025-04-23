@@ -1,3 +1,7 @@
+# v1.4.3
+
+* Fix dropped inputs (oops)
+
 # v1.4.2
 
 * Slightly improve performance
