@@ -44,7 +44,7 @@ TimestampType getCurrentTimestamp() {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	// time as μs
-	return (now.tv_sec * 1'000'000) + (now.tv_nsec / 1'000);
+	return (static_cast<TimestampType>(now.tv_sec) * 1'000'000) + (now.tv_nsec / 1'000);
 }
 
 #include <Geode/modify/CCTouchDispatcher.hpp>
