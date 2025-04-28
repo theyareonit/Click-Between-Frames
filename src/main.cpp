@@ -7,6 +7,7 @@
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
 #include <Geode/modify/GJGameLevel.hpp>
+#include <tulip/TulipHook.hpp>
 
 constexpr double SMALLEST_FLOAT = std::numeric_limits<float>::min();
 
@@ -372,6 +373,7 @@ CCPoint p1Pos = { 0.f, 0.f };
 CCPoint p2Pos = { 0.f, 0.f };
 
 float rotationDelta;
+float shipRotDelta = 0.0f;
 bool inputThisStep = false;
 bool clickOnSteps = false;
 bool p1Split = false;
@@ -483,6 +485,19 @@ class $modify(PlayerObject) {
 			pl->m_gameState.m_currentProgress = static_cast<int>(pl->m_gameState.m_levelTime * 240.0);
 		}
 	}
+
+	#ifdef GEODE_IS_WINDOWS
+	void updateShipRotation(float t) {
+		PlayLayer* pl = PlayLayer::get();
+
+		if (pl && (this == pl->m_player1 || this == pl->m_player2) && (physicsBypass || inputThisStep)) {
+			shipRotDelta = t;
+			PlayerObject::updateShipRotation(1.0/1024); // necessary to use a really small deltatime to get around an oversight in rob's math
+			shipRotDelta = 0.0f;
+		}
+		else PlayerObject::updateShipRotation(t);
+	}
+	#endif
 };
 
 /*
@@ -528,6 +543,15 @@ class $modify(GJGameLevel) {
 		if (!safeMode || softToggle.load()) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
 	}
 };
+
+float Slerp2D(float p0, float p1, float p2) {
+	auto orig = reinterpret_cast<float (*)(float, float, float)>(geode::base::get() + 0x71ec0);
+	if (shipRotDelta != 0.0f) { // only do anything if Slerp2D is called within PlayerObject::updateShipRotation()
+		shipRotDelta *= p2 * 1024; // p2 is 1/1024 scaled by a constant factor, we need to multiply shipRotDelta by that factor
+		return orig(p0, p1, shipRotDelta);
+	}
+	else return orig(p0, p1, p2);
+}
 
 void togglePhysicsBypass(bool enable) {
 #ifdef GEODE_IS_WINDOWS
@@ -609,6 +633,13 @@ $on_mod(Loaded) {
 	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
 
 #ifdef GEODE_IS_WINDOWS
+	(void) Mod::get()->hook(
+		reinterpret_cast<void*>(geode::base::get() + 0x71ec0),
+		Slerp2D,
+		"Slerp2D",
+		tulip::hook::TulipConvention::Default
+	);
+
 	windowsSetup();
 #endif
 }
