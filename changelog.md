@@ -1,3 +1,10 @@
+# v1.4.5
+
+* Fix inputs not registering on some 32-bit Android devices
+* Fix Click on Steps triggering anticheat on some levels
+* Improve rotation accuracy on frames where the player makes an input (Windows only for now)
+* Fix rotation when using "2.1 mode" Physics Bypass
+
 # v1.4.4
 
 * Fix dual desync (oops)
