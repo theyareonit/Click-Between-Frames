@@ -318,6 +318,14 @@ class $modify(CCScheduler) {
 #endif
 
 int stepCount;
+bool clickOnSteps = false;
+
+inline void cosProcessInputs() {
+	if (clickOnSteps && !stepQueue.empty()) {
+		Step step;
+		do step = popStepQueue(); while (!stepQueue.empty() && !step.endStep); // process 1 step (or more if theres an input)
+	}
+}
 
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto& self) {
@@ -344,12 +352,21 @@ class $modify(GJBaseGameLayer) {
 				skipUpdate = true;
 				firstFrame = true;
 			}
-			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
+			else if (modifiedDelta > 0.0) {
+				buildStepQueue(stepCount);
+				cosProcessInputs(); // must be called before triggers are updated but theres no good way to hook the start of the step loop
+			}
 			else skipUpdate = true;
 		}
 		else if (physicsBypass) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
 
 		return modifiedDelta;
+	}
+
+	// cant hook the very start of the step loop so we hook the very end instead, this gets called 1 more time than necessary but whatever
+	void updateCamera(float p0) {
+		GJBaseGameLayer::updateCamera(p0);
+		cosProcessInputs();
 	}
 
 	float getModifiedDelta(float delta) {
@@ -375,7 +392,6 @@ CCPoint p2Pos = { 0.f, 0.f };
 float rotationDelta;
 float shipRotDelta = 0.0f;
 bool inputThisStep = false;
-bool clickOnSteps = false;
 bool p1Split = false;
 bool p2Split = false;
 bool midStep = false;
@@ -392,11 +408,12 @@ class $modify(PlayerObject) {
 		}
 
 		inputThisStep = stepQueue.empty() ? false : !stepQueue.front().endStep;
-		if (!stepQueue.empty() && !inputThisStep) stepQueue.pop_front();
+		if (!stepQueue.empty() && !inputThisStep && !clickOnSteps) stepQueue.pop_front();
 		
 		if (skipUpdate
 			|| !pl
-			|| !inputThisStep)
+			|| !inputThisStep
+			|| clickOnSteps)
 		{
 			p1Split = false;
 			p2Split = false;
@@ -423,8 +440,8 @@ class $modify(PlayerObject) {
 		p1Pos = PlayerObject::getPosition(); // save for later to prevent desync with move triggers & some other issues
 		p2Pos = p2->getPosition();
 
-		p1Split = !clickOnSteps && p1NotBuffering;
-		p2Split = !clickOnSteps && p2NotBuffering && isDual;
+		p1Split = p1NotBuffering;
+		p2Split = p2NotBuffering && isDual;
 		
 		Step step;
 		bool firstLoop = true;
@@ -447,19 +464,17 @@ class $modify(PlayerObject) {
 			}
 			else if (step.endStep) PlayerObject::update(stepDelta); // revert to click-on-steps mode when buffering to reduce bugs
 
-			if (isDual) {
-				if (p2Split) {
-					p2->update(substepDelta);
-					if (!step.endStep) {
-						if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
-						if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
-						else pl->checkCollisions(p2, stepDelta, true);
-						p2->updateRotation(substepDelta);
-						decomp_resetCollisionLog(p2);
-					}
+			if (p2Split) {
+				p2->update(substepDelta);
+				if (!step.endStep) {
+					if (firstLoop && ((p2->m_yVelocity < 0) ^ p2->m_isUpsideDown)) p2->m_isOnGround = p2StartedOnGround;
+					if (!p2->m_isOnSlope || p2->m_isDart) pl->checkCollisions(p2, 0.0f, true);
+					else pl->checkCollisions(p2, stepDelta, true);
+					p2->updateRotation(substepDelta);
+					decomp_resetCollisionLog(p2);
 				}
-				else if (step.endStep) p2->update(stepDelta);
 			}
+			else if (step.endStep) p2->update(stepDelta);
 
 			firstLoop = false;
 		} while (!step.endStep);
