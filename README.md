@@ -35,5 +35,5 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 
 Icon by alex/sincos.
 
-Android & macOS code based off [Click on Steps by zmx](https://github.com/qimiko/click-on-steps), used with permission. \
+Android, macOS, & iOS code based off [Click on Steps by zmx](https://github.com/qimiko/click-on-steps), used with permission. \
 Android port by [mat](https://github.com/matcool), macOS & iOS ports port by [Jasmine](https://github.com/hiimjasmine00).
