@@ -1,3 +1,9 @@
+# v1.4.6
+
+* Fix Click on Steps processing inputs before spawn triggers were updated
+* Fix Physics Bypass respawn lag
+* Remove Click on Steps watermark since it should in theory have 100% parity with vanilla now
+
 # v1.4.5
 
 * Fix inputs not registering on some 32-bit Android devices

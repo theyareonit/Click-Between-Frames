@@ -36,7 +36,7 @@
 		},
 		"soft-toggle": {
 			"name": "Disable CBF",
-			"description": "Disable CBF without needing to restart GD. This option does not disable physics bypass if you have it enabled!",
+			"description": "Disable CBF/CoS without needing to restart GD. This option does not disable physics bypass if you have it enabled!",
 			"type": "bool",
 			"default": false
 		},

@@ -336,11 +336,11 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (physicsBypass && !firstFrame) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (physicsBypass && (!firstFrame || softToggle.load())) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
-			if (pl->m_playerDied || GameManager::sharedState()->getEditorLayer()) {
+			if (pl->m_playerDied || GameManager::sharedState()->getEditorLayer() || softToggle.load()) {
 				enableInput = true;
 				skipUpdate = true;
 				firstFrame = true;
