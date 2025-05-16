@@ -25,7 +25,7 @@
 
 # v1.4.0
 
-* Android & macOS support (thanks mat, Jasmine, and zmx!)
+* Android, macOS, & iOS support (thanks mat, Jasmine, and zmx!)
 * Added a "Click on Steps" mode in the mod settings
 * Fixed percentages with physics bypass on 2.2 levels
 * Fixed not being able to unplug/replug input devices on Linux without restarting GD (thanks keratomalacian!)

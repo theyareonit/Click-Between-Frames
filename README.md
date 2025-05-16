@@ -1,6 +1,6 @@
 # Installation
 
-Install [Geode](https://geode-sdk.org/install/) for Windows, then install this mod from the Geode index.
+Install [Geode](https://geode-sdk.org/install/), then install this mod from the Geode index.
 
 # What does it do
 
@@ -36,4 +36,4 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 Icon by alex/sincos.
 
 Android & macOS code based off [Click on Steps by zmx](https://github.com/qimiko/click-on-steps), used with permission. \
-Android port by [mat](https://github.com/matcool), macOS port by [Jasmine](https://github.com/hiimjasmine00).
+Android port by [mat](https://github.com/matcool), macOS & iOS ports port by [Jasmine](https://github.com/hiimjasmine00).
