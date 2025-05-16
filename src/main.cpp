@@ -517,11 +517,10 @@ class $modify(EndLevelLayer) {
 		if (!softToggle.load() || physicsBypass) {
 			std::string text;
 
-			if (softToggle.load() && physicsBypass) text = "PB";
-			else if (physicsBypass && !clickOnSteps) text = "CBF+PB";
-			else if (!clickOnSteps) text = "CBF";
-			else if (physicsBypass) text = "COS+PB";
-			else text = "COS";
+			if ((softToggle.load() || clickOnSteps) && physicsBypass) text = "PB";
+			else if (physicsBypass) text = "CBF+PB";
+			else if (!clickOnSteps && !softToggle.load()) text = "CBF";
+			else return;
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
 			CCLabelBMFont* indicator = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
