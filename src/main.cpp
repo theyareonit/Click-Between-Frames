@@ -320,13 +320,6 @@ class $modify(CCScheduler) {
 int stepCount;
 bool clickOnSteps = false;
 
-inline void cosProcessInputs() {
-	if (clickOnSteps && !stepQueue.empty()) {
-		Step step;
-		do step = popStepQueue(); while (!stepQueue.empty() && !step.endStep); // process 1 step (or more if theres an input)
-	}
-}
-
 class $modify(GJBaseGameLayer) {
 	static void onModify(auto& self) {
 		(void) self.setHookPriority("GJBaseGameLayer::handleButton", Priority::VeryEarly);
@@ -343,7 +336,7 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (physicsBypass) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (physicsBypass && !firstFrame) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
@@ -352,10 +345,7 @@ class $modify(GJBaseGameLayer) {
 				skipUpdate = true;
 				firstFrame = true;
 			}
-			else if (modifiedDelta > 0.0) {
-				buildStepQueue(stepCount);
-				cosProcessInputs(); // must be called before triggers are updated but theres no good way to hook the start of the step loop
-			}
+			else if (modifiedDelta > 0.0) buildStepQueue(stepCount);
 			else skipUpdate = true;
 		}
 		else if (physicsBypass) stepCount = calculateStepCount(modifiedDelta, this->m_gameState.m_timeWarp, true); // disable physics bypass outside levels
@@ -363,10 +353,12 @@ class $modify(GJBaseGameLayer) {
 		return modifiedDelta;
 	}
 
-	// cant hook the very start of the step loop so we hook the very end instead, this gets called 1 more time than necessary but whatever
-	void updateCamera(float p0) {
-		GJBaseGameLayer::updateCamera(p0);
-		cosProcessInputs();
+	void processCommands(float p0) {
+		if (clickOnSteps && !stepQueue.empty()) {
+			Step step;
+			do step = popStepQueue(); while (!stepQueue.empty() && !step.endStep); // process 1 step (or more if theres an input)
+		}
+		GJBaseGameLayer::processCommands(p0);
 	}
 
 	float getModifiedDelta(float delta) {
