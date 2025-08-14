@@ -1,5 +1,6 @@
 #include "includes.hpp"
 #include <geode.custom-keybinds/include/Keybinds.hpp>
+// #include "Xinput.h"
 
 TimestampType getCurrentTimestamp() {
 	LARGE_INTEGER t;
@@ -115,7 +116,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 
-void inputThread() {
+void rawInputThread() {
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
@@ -148,13 +149,98 @@ void inputThread() {
 	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
 	MSG msg;
-	while (GetMessage(&msg, hwnd, 0, 0)) {
-		DispatchMessage(&msg);
-		while (softToggle.load()) { // reduce lag while mod is disabled
-			Sleep(2000);
-			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
-		}
-	}
+    while (GetMessage(&msg, hwnd, 0, 0)) {
+        DispatchMessage(&msg);
+        while (softToggle.load()) { // reduce lag while mod is disabled
+            Sleep(2000);
+            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
+        }
+    }
+}
+
+void xinputThread() {
+    const HMODULE xinputLib = LoadLibrary("Xinput1_4.dll");
+    if (xinputLib == NULL) {
+        log::error("Failed to load Xinput1_4.dll");
+        return;
+    }
+    typedef DWORD(WINAPI* XInputGetState_t)(DWORD, XINPUT_STATE*);
+    const auto XInputGetState = (XInputGetState_t)GetProcAddress(xinputLib, "XInputGetState");
+
+    // cocos2d doesn't match with Xinput
+    std::unordered_map<int, enumKeyCodes> xinputToCCKey = {
+        { XINPUT_GAMEPAD_DPAD_UP, CONTROLLER_Up },
+        { XINPUT_GAMEPAD_DPAD_DOWN, CONTROLLER_Down },
+        { XINPUT_GAMEPAD_DPAD_LEFT, CONTROLLER_Left },
+        { XINPUT_GAMEPAD_DPAD_RIGHT, CONTROLLER_Right },
+        { XINPUT_GAMEPAD_START, CONTROLLER_Start },
+        { XINPUT_GAMEPAD_BACK, CONTROLLER_Back },
+        { XINPUT_GAMEPAD_LEFT_THUMB, CONTROLLER_LT },
+        { XINPUT_GAMEPAD_RIGHT_THUMB, CONTROLLER_RT },
+        { XINPUT_GAMEPAD_LEFT_SHOULDER, CONTROLLER_LB },
+        { XINPUT_GAMEPAD_RIGHT_SHOULDER, CONTROLLER_RB },
+        { XINPUT_GAMEPAD_A, CONTROLLER_A },
+        { XINPUT_GAMEPAD_B, CONTROLLER_B },
+        { XINPUT_GAMEPAD_X, CONTROLLER_X },
+        { XINPUT_GAMEPAD_Y, CONTROLLER_Y }
+    };
+
+    if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
+    while (true) {
+        DWORD dwResult;    
+        for (DWORD i = 0; i < XUSER_MAX_COUNT; i++ ) {
+            XINPUT_STATE state;
+            ZeroMemory(&state, sizeof(XINPUT_STATE));
+    
+            dwResult = XInputGetState(i, &state);
+            
+            // controller not connected
+            if (dwResult != ERROR_SUCCESS) {
+                continue;
+            }
+
+            for (auto& [xinputButton, ccButton] : xinputToCCKey) {
+                bool inputState;
+                // button held
+                if (state.Gamepad.wButtons & xinputButton) {
+                    if (heldInputs.contains(ccButton)) continue; // skip if already held
+                    heldInputs.emplace(ccButton);
+                    inputState = Press;
+                } else {
+                    if (!heldInputs.contains(ccButton)) continue; // skip if not held
+                    heldInputs.erase(ccButton);
+                    inputState = Release;
+                }
+                LARGE_INTEGER time;
+                QueryPerformanceCounter(&time);
+                PlayerButton inputType;
+                bool player1 = true;
+
+                {
+                    std::lock_guard lock(keybindsLock);
+
+                    if (inputBinds[p1Jump].contains(ccButton)) inputType = PlayerButton::Jump;
+                    else if (inputBinds[p1Left].contains(ccButton)) inputType = PlayerButton::Left;
+                    else if (inputBinds[p1Right].contains(ccButton)) inputType = PlayerButton::Right;
+                    else {
+                        player1 = false;
+                        if (inputBinds[p2Jump].contains(ccButton)) inputType = PlayerButton::Jump;
+                        else if (inputBinds[p2Left].contains(ccButton)) inputType = PlayerButton::Left;
+                        else if (inputBinds[p2Right].contains(ccButton)) inputType = PlayerButton::Right;
+                        else continue;
+                    }
+                }
+                {
+                    std::lock_guard lock(inputQueueLock);
+                    inputQueue.emplace_back(InputEvent{ timestampFromLarge(time), inputType, inputState, player1 });
+                }
+            }
+        }
+        while (softToggle.load()) { // reduce lag while mod is disabled
+            Sleep(2000);
+        }
+    }
 }
 
 // notify the player if theres an issue with input on Linux
@@ -307,6 +393,9 @@ void windowsSetup() {
 	}
 
 	if (!linuxNative) {
-		std::thread(inputThread).detach();
+		std::thread(rawInputThread).detach();
+        if (PlatformToolbox::isControllerConnected()) {
+            std::thread(xinputThread).detach();
+        }
 	}
 }

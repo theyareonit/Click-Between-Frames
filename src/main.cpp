@@ -169,6 +169,10 @@ void updateKeybinds() {
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
 	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
 
+    for (size_t i : binds[p1Jump]) {
+        log::debug("p1Jump bind: {}", i);
+    }
+
 	{
 		std::lock_guard lock(keybindsLock);
 		inputBinds = binds;
