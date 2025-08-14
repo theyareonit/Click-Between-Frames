@@ -1,3 +1,7 @@
+# v1.4.7
+
+* Added JIT-Less support for iOS
+
 # v1.4.6
 
 * Fix Click on Steps processing inputs before spawn triggers were updated
