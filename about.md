@@ -25,7 +25,7 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 # Known issues
 
 - This mod does not work with bots
-- Controller input is not yet supported
+- Controller input has limited support
 
 # Credits
 

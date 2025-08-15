@@ -1,6 +1,5 @@
 #include "includes.hpp"
 #include <geode.custom-keybinds/include/Keybinds.hpp>
-// #include "Xinput.h"
 
 TimestampType getCurrentTimestamp() {
 	LARGE_INTEGER t;
@@ -182,17 +181,27 @@ void xinputThread() {
         { XINPUT_GAMEPAD_A, CONTROLLER_A },
         { XINPUT_GAMEPAD_B, CONTROLLER_B },
         { XINPUT_GAMEPAD_X, CONTROLLER_X },
-        { XINPUT_GAMEPAD_Y, CONTROLLER_Y }
+        { XINPUT_GAMEPAD_Y, CONTROLLER_Y },
+        { -1, CONTROLLER_LTHUMBSTICK_UP },
+        { -1, CONTROLLER_LTHUMBSTICK_DOWN },
+        { -1, CONTROLLER_LTHUMBSTICK_LEFT },
+        { -1, CONTROLLER_LTHUMBSTICK_RIGHT },
+        { -1, CONTROLLER_RTHUMBSTICK_UP },
+        { -1, CONTROLLER_RTHUMBSTICK_DOWN },
+        { -1, CONTROLLER_RTHUMBSTICK_LEFT },
+        { -1, CONTROLLER_RTHUMBSTICK_RIGHT }
     };
 
     if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
-    while (true) {
+    bool xinputWorks = false;
+
+    do {
+        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+
         DWORD dwResult;    
         for (DWORD i = 0; i < XUSER_MAX_COUNT; i++ ) {
             XINPUT_STATE state;
-            ZeroMemory(&state, sizeof(XINPUT_STATE));
-    
             dwResult = XInputGetState(i, &state);
             
             // controller not connected
@@ -200,10 +209,50 @@ void xinputThread() {
                 continue;
             }
 
+            xinputWorks = true;
+
+            // log::debug("thumbstick left: ({}, {}), right: ({}, {})", state.Gamepad.sThumbLX, state.Gamepad.sThumbLY, state.Gamepad.sThumbRX, state.Gamepad.sThumbRY);
+
             for (auto& [xinputButton, ccButton] : xinputToCCKey) {
                 bool inputState;
-                // button held
-                if (state.Gamepad.wButtons & xinputButton) {
+
+                bool buttonPressed = heldInputs.contains(ccButton);
+                // if it's not a joystick
+                if (xinputButton != -1) {
+                    buttonPressed = state.Gamepad.wButtons & xinputButton;
+                } else {
+                    switch (ccButton) {
+                    case CONTROLLER_LTHUMBSTICK_UP:
+                        buttonPressed = state.Gamepad.sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_DOWN:
+                        buttonPressed = state.Gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_LEFT:
+                        buttonPressed = state.Gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_RIGHT:
+                        buttonPressed = state.Gamepad.sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_UP:
+                        buttonPressed = state.Gamepad.sThumbRY > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_DOWN:
+                        buttonPressed = state.Gamepad.sThumbRY < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_LEFT:
+                        buttonPressed = state.Gamepad.sThumbRX < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_RIGHT:
+                        buttonPressed = state.Gamepad.sThumbRX > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    default:
+                        // shouldn't be possible, just to prevent warnings
+                        continue;
+                    }
+                }
+
+                if (buttonPressed) {
                     if (heldInputs.contains(ccButton)) continue; // skip if already held
                     heldInputs.emplace(ccButton);
                     inputState = Press;
@@ -212,6 +261,7 @@ void xinputThread() {
                     heldInputs.erase(ccButton);
                     inputState = Release;
                 }
+
                 LARGE_INTEGER time;
                 QueryPerformanceCounter(&time);
                 PlayerButton inputType;
@@ -237,9 +287,17 @@ void xinputThread() {
                 }
             }
         }
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::chrono::nanoseconds elapsed = end - start;
+        // reduce lag, inputs should still be accurate to 1/2000th of a second
+        std::this_thread::sleep_for(std::chrono::nanoseconds(500000) - elapsed);
         while (softToggle.load()) { // reduce lag while mod is disabled
             Sleep(2000);
         }
+    } while (xinputWorks);
+
+    if (!xinputWorks) {
+        log::error("Xinput failed to read any controllers");
     }
 }
 
@@ -394,8 +452,9 @@ void windowsSetup() {
 
 	if (!linuxNative) {
 		std::thread(rawInputThread).detach();
-        if (PlatformToolbox::isControllerConnected()) {
-            std::thread(xinputThread).detach();
-        }
 	}
+
+    if (CCApplication::get()->getControllerConnected()) {
+        std::thread(xinputThread).detach();
+    }
 }

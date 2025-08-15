@@ -169,8 +169,9 @@ void updateKeybinds() {
 	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
 	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
 
-    for (size_t i : binds[p1Jump]) {
-        log::debug("p1Jump bind: {}", i);
+    // log the binds for p1Left
+    for (auto& bind : binds[p1Left]) {
+        log::info("p1Left bind: {}", bind);
     }
 
 	{
