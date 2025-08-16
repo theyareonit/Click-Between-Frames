@@ -167,29 +167,29 @@ void xinputThread() {
     const auto XInputGetState = (XInputGetState_t)GetProcAddress(xinputLib, "XInputGetState");
 
     // cocos2d doesn't match with Xinput
-    std::unordered_map<int, enumKeyCodes> xinputToCCKey = {
-        { XINPUT_GAMEPAD_DPAD_UP, CONTROLLER_Up },
-        { XINPUT_GAMEPAD_DPAD_DOWN, CONTROLLER_Down },
-        { XINPUT_GAMEPAD_DPAD_LEFT, CONTROLLER_Left },
-        { XINPUT_GAMEPAD_DPAD_RIGHT, CONTROLLER_Right },
-        { XINPUT_GAMEPAD_START, CONTROLLER_Start },
-        { XINPUT_GAMEPAD_BACK, CONTROLLER_Back },
-        { XINPUT_GAMEPAD_LEFT_THUMB, CONTROLLER_LT },
-        { XINPUT_GAMEPAD_RIGHT_THUMB, CONTROLLER_RT },
-        { XINPUT_GAMEPAD_LEFT_SHOULDER, CONTROLLER_LB },
-        { XINPUT_GAMEPAD_RIGHT_SHOULDER, CONTROLLER_RB },
-        { XINPUT_GAMEPAD_A, CONTROLLER_A },
-        { XINPUT_GAMEPAD_B, CONTROLLER_B },
-        { XINPUT_GAMEPAD_X, CONTROLLER_X },
-        { XINPUT_GAMEPAD_Y, CONTROLLER_Y },
-        { -1, CONTROLLER_LTHUMBSTICK_UP },
-        { -1, CONTROLLER_LTHUMBSTICK_DOWN },
-        { -1, CONTROLLER_LTHUMBSTICK_LEFT },
-        { -1, CONTROLLER_LTHUMBSTICK_RIGHT },
-        { -1, CONTROLLER_RTHUMBSTICK_UP },
-        { -1, CONTROLLER_RTHUMBSTICK_DOWN },
-        { -1, CONTROLLER_RTHUMBSTICK_LEFT },
-        { -1, CONTROLLER_RTHUMBSTICK_RIGHT }
+    std::array<std::pair<int, enumKeyCodes>, 22> xinputToCCKey = {
+        std::pair { XINPUT_GAMEPAD_DPAD_UP, CONTROLLER_Up },
+        std::pair { XINPUT_GAMEPAD_DPAD_DOWN, CONTROLLER_Down },
+        std::pair { XINPUT_GAMEPAD_DPAD_LEFT, CONTROLLER_Left },
+        std::pair { XINPUT_GAMEPAD_DPAD_RIGHT, CONTROLLER_Right },
+        std::pair { XINPUT_GAMEPAD_START, CONTROLLER_Start },
+        std::pair { XINPUT_GAMEPAD_BACK, CONTROLLER_Back },
+        std::pair { XINPUT_GAMEPAD_LEFT_SHOULDER, CONTROLLER_LB },
+        std::pair { XINPUT_GAMEPAD_RIGHT_SHOULDER, CONTROLLER_RB },
+        std::pair { XINPUT_GAMEPAD_A, CONTROLLER_A },
+        std::pair { XINPUT_GAMEPAD_B, CONTROLLER_B },
+        std::pair { XINPUT_GAMEPAD_X, CONTROLLER_X },
+        std::pair { XINPUT_GAMEPAD_Y, CONTROLLER_Y },
+        std::pair { -1, CONTROLLER_LT },
+        std::pair { -1, CONTROLLER_RT },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_UP },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_DOWN },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_LEFT },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_RIGHT },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_UP },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_DOWN },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_LEFT },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_RIGHT }
     };
 
     if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
@@ -217,11 +217,17 @@ void xinputThread() {
                 bool inputState;
 
                 bool buttonPressed = heldInputs.contains(ccButton);
-                // if it's not a joystick
+                // if it's not a joystick or trigger, we can just use & to check if the button is pressed
                 if (xinputButton != -1) {
                     buttonPressed = state.Gamepad.wButtons & xinputButton;
-                } else {
+                } else { // otherwise we have to check the values
                     switch (ccButton) {
+                    case CONTROLLER_LT:
+                        buttonPressed = state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                        break;
+                    case CONTROLLER_RT:
+                        buttonPressed = state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                        break;
                     case CONTROLLER_LTHUMBSTICK_UP:
                         buttonPressed = state.Gamepad.sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
                         break;
@@ -334,7 +340,7 @@ class $modify(CreatorLayer) {
 };
 
 void linuxCheckInputs() {
-	std::unordered_map<int, enumKeyCodes> linuxToCCKey = {
+	static std::unordered_map<int, enumKeyCodes> linuxToCCKey = {
 		{ BTN_A, CONTROLLER_A },
 		{ BTN_B, CONTROLLER_B },
 		{ BTN_X, CONTROLLER_X },
@@ -439,7 +445,7 @@ void linuxCheckInputs() {
 						break;
 					case ABS_Z:
 						keyCode = CONTROLLER_LT;
-						if (events[i].value > 30) {
+						if (events[i].value > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
 							value = Press;
 						} else {
 							value = Release;
@@ -447,7 +453,7 @@ void linuxCheckInputs() {
 						break;
 					case ABS_RZ:
 						keyCode = CONTROLLER_RT;
-						if (events[i].value > 30) {
+						if (events[i].value > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
 							value = Press;
 						} else {
 							value = Release;
