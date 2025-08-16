@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <dirent.h>
+#include <sys/ioctl.h>
 #include <sys/epoll.h>
 #include <sys/inotify.h>
 #include <bits/stdc++.h>
@@ -17,11 +18,21 @@
 #include <atomic>
 #include <array>
 
+enum DeviceType : int8_t {
+    MOUSE,
+    TOUCHPAD,
+    KEYBOARD,
+    TOUCHSCREEN,
+    CONTROLLER,
+    UNKNOWN
+};
+
 struct __attribute__((packed)) LinuxInputEvent {
     LARGE_INTEGER time;
     USHORT type;
     USHORT code;
     int value;
+    DeviceType deviceType;
 };
 
 constexpr size_t BUFFER_SIZE = 20;
@@ -101,7 +112,7 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
     }
 
     int bus = libevdev_get_id_bustype(dev);
-    if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042) {
+    if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042 || bus == BUS_VIRTUAL) {
         epoll_event ev;
         ev.events = EPOLLIN;
         ev.data.ptr = dev;
@@ -135,6 +146,18 @@ void remove_input_device(std::string path, std::vector<struct libevdev*> &device
     devices_paths.erase(devices_paths.begin() + index);
 
     std::cerr << "[CBF] Removed device: " << path << std::endl;
+}
+
+// normalize axis to -32768 to 32767 to match with xinput
+int32_t normalize_axis(struct libevdev* dev, int axis) {
+    struct input_absinfo absinfo;
+    if (ioctl(libevdev_get_fd(dev), EVIOCGABS(axis), &absinfo) < 0) {
+        std::cerr << "[CBF] Failed to get controller info, assuming range of controller is fine" << std::endl;
+        return axis;
+    }
+    float normalized = static_cast<float>(axis - absinfo.minimum) / static_cast<float>(absinfo.maximum - absinfo.minimum);
+    int32_t scaled = static_cast<int32_t>(normalized * 65535.0f) - 32768;
+    return scaled;
 }
 
 int main() {
@@ -278,29 +301,68 @@ int main() {
                     std::cerr << "[CBF] Error reading event: " << strerror(-rc) << std::endl;
                     break;
                 }
-                if (ev.type == EV_KEY && ev.value != 2) { // Exclude autorepeat
-                    LARGE_INTEGER time = convert_time(ev.time);
-                    USHORT code;
+                
+                LARGE_INTEGER time = convert_time(ev.time);
+                USHORT code = ev.code;
+                int value = ev.value;
+                DeviceType device_type;
 
-                    if (libevdev_has_event_type(dev, EV_REL)) code = ev.code + 0x3000; // if mouse
-                    else code = convert_scan_code(ev.code);
+                if (libevdev_has_event_type(dev, EV_REL)) {
+                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                    device_type = MOUSE;
+                }
+                else if (libevdev_has_event_code(dev, EV_KEY, KEY_1)) {
+                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                    device_type = KEYBOARD;
+                    code = convert_scan_code(ev.code);
+                }
+                else if (libevdev_has_property(dev, INPUT_PROP_DIRECT)) {
+                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                    device_type = TOUCHSCREEN;
+                }
+                else if (libevdev_has_property(dev, INPUT_PROP_BUTTONPAD)) {
+                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                    device_type = TOUCHPAD;
+                }
+                else if (libevdev_has_event_code(dev, EV_KEY, BTN_GAMEPAD)) {
+                    device_type = CONTROLLER;
+                    if (ev.type == EV_ABS) {
+                        value = normalize_axis(dev, value);
+                    } else if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                }
+                else {
+                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        continue;
+                    }
+                    device_type = UNKNOWN;
+                }
 
-                    DWORD waitResult = WaitForSingleObject(hMutex, 1000);
-                    if (waitResult == WAIT_OBJECT_0) {
-                        for (int i = 0; i < BUFFER_SIZE; i++) {
-                            if (shared_events[i].type == 0) { // if there is room in the buffer
-                                shared_events[i].time = time;
-                                shared_events[i].type = ev.type;
-                                shared_events[i].code = code;
-                                shared_events[i].value = ev.value;
-                                break;
-                            }
+                DWORD waitResult = WaitForSingleObject(hMutex, 1000);
+                if (waitResult == WAIT_OBJECT_0) {
+                    for (int i = 0; i < BUFFER_SIZE; i++) {
+                        if (shared_events[i].type == 0) { // if there is room in the buffer
+                            shared_events[i].time = time;
+                            shared_events[i].type = ev.type;
+                            shared_events[i].code = code;
+                            shared_events[i].value = value;
+                            shared_events[i].deviceType = device_type;
+                            break;
                         }
-                        ReleaseMutex(hMutex);
                     }
-                    else if (waitResult != WAIT_TIMEOUT) {
-                        std::cerr << "[CBF] Failed to acquire mutex: " << GetLastError() << std::endl;
-                    }
+                    ReleaseMutex(hMutex);
+                }
+                else if (waitResult != WAIT_TIMEOUT) {
+                    std::cerr << "[CBF] Failed to acquire mutex: " << GetLastError() << std::endl;
                 }
             }
         }

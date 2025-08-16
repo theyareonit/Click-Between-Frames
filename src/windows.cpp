@@ -344,15 +344,22 @@ void linuxCheckInputs() {
 			bool player1 = true;
 
 			USHORT scanCode = events[i].code;
-			if (scanCode == 0x3110) { // left click
-				input.inputType = PlayerButton::Jump;
-			}
-			else if (scanCode == 0x3111) { // right click
-				if (!enableRightClick.load()) continue;
-				input.inputType = PlayerButton::Jump;
-				player1 = false;
-			}
-			else {
+
+			log::debug("deviceType: {}, code: {:x}, type: {}", static_cast<int>(events[i].deviceType), scanCode, events[i].type);
+
+			switch (events[i].deviceType) {
+			case MOUSE:
+			case TOUCHPAD:
+				if (scanCode == 0x110) { // left click
+					input.inputType = PlayerButton::Jump;
+				}
+				else if (scanCode == 0x111) { // right click
+					if (!enableRightClick.load()) continue;
+					input.inputType = PlayerButton::Jump;
+					player1 = false;
+				}
+				break;
+			case KEYBOARD: {
 				USHORT keyCode = MapVirtualKeyExA(scanCode, MAPVK_VSC_TO_VK, GetKeyboardLayout(0));
 				if (inputBinds[p1Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
 				else if (inputBinds[p1Left].contains(keyCode)) input.inputType = PlayerButton::Left;
@@ -364,6 +371,17 @@ void linuxCheckInputs() {
 					else if (inputBinds[p2Right].contains(keyCode)) input.inputType = PlayerButton::Right;
 					else continue;
 				}
+				break;
+			}
+			case TOUCHSCREEN:
+				if (scanCode == 0x14a || scanCode == 0x140) { // touching screen
+					input.inputType = PlayerButton::Jump;
+				}
+				break;
+			case CONTROLLER:
+				break; // TODO
+			default:
+				continue;
 			}
 
 			input.inputState = events[i].value;
