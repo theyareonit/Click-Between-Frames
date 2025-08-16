@@ -148,15 +148,12 @@ void remove_input_device(std::string path, std::vector<struct libevdev*> &device
     std::cerr << "[CBF] Removed device: " << path << std::endl;
 }
 
-// normalize axis to -32768 to 32767 to match with xinput
-int32_t normalize_axis(struct libevdev* dev, int axis) {
-    struct input_absinfo absinfo;
-    if (ioctl(libevdev_get_fd(dev), EVIOCGABS(axis), &absinfo) < 0) {
-        std::cerr << "[CBF] Failed to get controller info, assuming range of controller is fine" << std::endl;
-        return axis;
-    }
-    float normalized = static_cast<float>(axis - absinfo.minimum) / static_cast<float>(absinfo.maximum - absinfo.minimum);
-    int32_t scaled = static_cast<int32_t>(normalized * 65535.0f) - 32768;
+// ensure an axis is consistent among all controllers
+int32_t normalize_axis(struct libevdev* dev, int code, int val, int min, int max) {
+    int abs_min = libevdev_get_abs_minimum(dev, code);
+    int abs_max = libevdev_get_abs_maximum(dev, code);
+    float normalized = static_cast<float>(val - abs_min) / static_cast<float>(abs_max - abs_min);
+    int32_t scaled = static_cast<int32_t>(normalized * (max - min)) + min;
     return scaled;
 }
 
@@ -335,8 +332,10 @@ int main() {
                 else if (libevdev_has_event_code(dev, EV_KEY, BTN_GAMEPAD)) {
                     device_type = CONTROLLER;
                     if (ev.type == EV_ABS) {
-                        value = normalize_axis(dev, value);
-                    } else if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
+                        if (ev.code == ABS_Z || ev.code == ABS_RZ) value = normalize_axis(dev, code, value, 0, 255); // different range for lt and rt
+                        else value = normalize_axis(dev, code, value, -32768, 32767);
+                    } 
+                    else if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
                         continue;
                     }
                 }

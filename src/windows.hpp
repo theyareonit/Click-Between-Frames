@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Geode/Geode.hpp>
+#include "linuxeventcodes.hpp"
 
 enum DeviceType : int8_t {
     MOUSE,

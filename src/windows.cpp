@@ -334,6 +334,17 @@ class $modify(CreatorLayer) {
 };
 
 void linuxCheckInputs() {
+	std::unordered_map<int, enumKeyCodes> linuxToCCKey = {
+		{ BTN_A, CONTROLLER_A },
+		{ BTN_B, CONTROLLER_B },
+		{ BTN_X, CONTROLLER_X },
+		{ BTN_Y, CONTROLLER_Y },
+		{ BTN_TL, CONTROLLER_LB },
+		{ BTN_TR, CONTROLLER_RB },
+		{ BTN_SELECT, CONTROLLER_Back },
+		{ BTN_START, CONTROLLER_Start },
+	};
+
 	DWORD waitResult = WaitForSingleObject(hMutex, 1);
 	if (waitResult == WAIT_OBJECT_0) {
 		LinuxInputEvent* events = static_cast<LinuxInputEvent*>(pBuf);
@@ -342,18 +353,16 @@ void linuxCheckInputs() {
 
 			InputEvent input;
 			bool player1 = true;
-
 			USHORT scanCode = events[i].code;
-
-			log::debug("deviceType: {}, code: {:x}, type: {}", static_cast<int>(events[i].deviceType), scanCode, events[i].type);
+			int value = events[i].value;
 
 			switch (events[i].deviceType) {
 			case MOUSE:
 			case TOUCHPAD:
-				if (scanCode == 0x110) { // left click
+				if (scanCode == BUTTON_LEFT) {
 					input.inputType = PlayerButton::Jump;
 				}
-				else if (scanCode == 0x111) { // right click
+				else if (scanCode == BUTTON_RIGHT) {
 					if (!enableRightClick.load()) continue;
 					input.inputType = PlayerButton::Jump;
 					player1 = false;
@@ -374,17 +383,109 @@ void linuxCheckInputs() {
 				break;
 			}
 			case TOUCHSCREEN:
-				if (scanCode == 0x14a || scanCode == 0x140) { // touching screen
+				if (scanCode == BTN_TOUCH) { // touching screen
 					input.inputType = PlayerButton::Jump;
 				}
 				break;
-			case CONTROLLER:
-				break; // TODO
+			case CONTROLLER: {
+				int keyCode = -1;
+				if (events[i].type == EV_KEY) {
+					keyCode = linuxToCCKey[scanCode];
+				} else if (events[i].type == EV_ABS) {
+					bool continueLoop = false;
+					auto analyze4Directions = [&] (int deadzone, enumKeyCodes negative, enumKeyCodes positive) {
+						if (events[i].value < -deadzone) {
+							keyCode = negative;
+							if (heldInputs.contains(negative)) {
+								continueLoop = true; // already held, ignore
+							}
+							value = Press;
+						} else if (events[i].value > deadzone) {
+							keyCode = positive;
+							if (heldInputs.contains(positive)) {
+								continueLoop = true; // already held, ignore
+							}
+							value = Press;
+						} else {
+							value = Release;
+							if (heldInputs.contains(negative)) {
+								keyCode = negative;
+							} else if (heldInputs.contains(positive)) {
+								keyCode = positive;
+							} else {
+								continueLoop = true; // continue cuz button was already released
+							}
+						}
+					};
+
+					switch (events[i].code) {
+					case ABS_X: // left thumbstick x
+						analyze4Directions(XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, CONTROLLER_LTHUMBSTICK_LEFT, CONTROLLER_LTHUMBSTICK_RIGHT);
+						break;
+					case ABS_Y: // left thumbstick y
+						analyze4Directions(XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, CONTROLLER_LTHUMBSTICK_UP, CONTROLLER_LTHUMBSTICK_DOWN);
+						break;
+					case ABS_RX: // right thumbstick x
+						analyze4Directions(XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, CONTROLLER_RTHUMBSTICK_LEFT, CONTROLLER_RTHUMBSTICK_RIGHT);
+						break;
+					case ABS_RY: // right thumbstick y
+						analyze4Directions(XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, CONTROLLER_RTHUMBSTICK_UP, CONTROLLER_RTHUMBSTICK_DOWN);
+						break;
+					case ABS_HAT0X: // dpadx
+						analyze4Directions(10, CONTROLLER_Left, CONTROLLER_Right);
+						break;
+					case ABS_HAT0Y: // dpady
+						analyze4Directions(10, CONTROLLER_Up, CONTROLLER_Down);
+						break;
+					case ABS_Z:
+						keyCode = CONTROLLER_LT;
+						if (events[i].value > 30) {
+							value = Press;
+						} else {
+							value = Release;
+						}
+						break;
+					case ABS_RZ:
+						keyCode = CONTROLLER_RT;
+						if (events[i].value > 30) {
+							value = Press;
+						} else {
+							value = Release;
+						}
+						break;
+					}
+					if (continueLoop) continue;
+				}
+				if (inputBinds[p1Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+				else if (inputBinds[p1Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+				else if (inputBinds[p1Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+				else {
+					player1 = false;
+					if (inputBinds[p2Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+					else if (inputBinds[p2Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+					else if (inputBinds[p2Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+					else continue;
+				}
+				if (value == Press) {
+					if (heldInputs.contains(keyCode)) {
+						continue; // already held, ignore
+					} else {
+						heldInputs.emplace(keyCode);
+					}
+				} else {
+					if (!heldInputs.contains(keyCode)) {
+						continue; // already released, ignore
+					} else {
+						heldInputs.erase(keyCode);
+					}
+				}
+				break;
+			}
 			default:
 				continue;
 			}
 
-			input.inputState = events[i].value;
+			input.inputState = value;
 			input.time = timestampFromLarge(events[i].time);
 			input.isPlayer1 = player1;
 
@@ -470,9 +571,8 @@ void windowsSetup() {
 
 	if (!linuxNative) {
 		std::thread(rawInputThread).detach();
+		if (CCApplication::get()->getControllerConnected()) {
+			std::thread(xinputThread).detach();
+		}
 	}
-
-    if (CCApplication::get()->getControllerConnected()) {
-        std::thread(xinputThread).detach();
-    }
 }
