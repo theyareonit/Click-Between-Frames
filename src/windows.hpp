@@ -14,6 +14,7 @@ extern HANDLE hMutex;
 extern LPVOID pBuf;
 
 extern bool linuxNative;
+extern bool useCustomKeybinds;
 
 inline LARGE_INTEGER largeFromTimestamp(TimestampType t) {
 	LARGE_INTEGER res;

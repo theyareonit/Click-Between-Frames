@@ -1,5 +1,5 @@
 {
-	"geode": "4.4.0",
+	"geode": "4.9.0",
 	"gd": {
 		"win": "2.2074",
 		"android": "2.2074",
@@ -13,8 +13,8 @@
 	"description": "Allows inputs to register between frames.",
 	"dependencies": {
 		"geode.custom-keybinds": {
-			"importance": "required",
-			"version": ">=v1.10.0",
+			"importance": "suggested",
+			"version": ">=v1.11.0",
 			"platforms": ["win"]
 		}
 	},
