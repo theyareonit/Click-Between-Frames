@@ -1,5 +1,4 @@
 #include "includes.hpp"
-#include <geode.custom-keybinds/include/OptionalAPI.hpp>
 
 TimestampType getCurrentTimestamp() {
 	LARGE_INTEGER t;
@@ -93,14 +92,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else return 0;
 
 				queueInMainThread([inputState]() {
-					if (useCustomKeybinds) {
-						keybinds::InvokeBindEventV2("robtop.geometry-dash/jump-p2", inputState).post();
-					} else {
-						auto* pl = PlayLayer::get();
-						if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
-						pl->queueButton(1, inputState, true);
-						pl->m_uiLayer->m_p2Jumping = inputState;
-					}
+					auto* pl = PlayLayer::get();
+					// check for fake playlayers
+					if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
+					pl->queueButton(1, inputState, true);
+					pl->m_uiLayer->m_p2Jumping = inputState;
 				});
 			}
 
