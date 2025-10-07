@@ -92,11 +92,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
 
-				if (useCustomKeybinds) {
-					queueInMainThread([inputState]() {
+				queueInMainThread([inputState]() {
+					if (useCustomKeybinds) {
 						keybinds::InvokeBindEventV2("robtop.geometry-dash/jump-p2", inputState).post();
-					});
-				}
+					} else {
+						auto* pl = PlayLayer::get();
+						if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
+						pl->queueButton(1, inputState, true);
+						pl->m_uiLayer->m_p2Jumping = inputState;
+					}
+				});
 			}
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
