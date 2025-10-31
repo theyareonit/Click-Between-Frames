@@ -115,7 +115,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 
-void inputThread() {
+void rawInputThread() {
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
@@ -148,13 +148,163 @@ void inputThread() {
 	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
 	MSG msg;
-	while (GetMessage(&msg, hwnd, 0, 0)) {
-		DispatchMessage(&msg);
-		while (softToggle.load()) { // reduce lag while mod is disabled
-			Sleep(2000);
-			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
-		}
-	}
+    while (GetMessage(&msg, hwnd, 0, 0)) {
+        DispatchMessage(&msg);
+        while (softToggle.load()) { // reduce lag while mod is disabled
+            Sleep(2000);
+            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
+        }
+    }
+}
+
+void xinputThread() {
+    const HMODULE xinputLib = LoadLibrary("Xinput1_4.dll");
+    if (xinputLib == NULL) {
+        log::error("Failed to load Xinput1_4.dll");
+        return;
+    }
+    typedef DWORD(WINAPI* XInputGetState_t)(DWORD, XINPUT_STATE*);
+    const auto XInputGetState = (XInputGetState_t)GetProcAddress(xinputLib, "XInputGetState");
+
+    // cocos2d doesn't match with Xinput
+    std::array<std::pair<int, enumKeyCodes>, 22> xinputToCCKey = {
+        std::pair { XINPUT_GAMEPAD_DPAD_UP, CONTROLLER_Up },
+        std::pair { XINPUT_GAMEPAD_DPAD_DOWN, CONTROLLER_Down },
+        std::pair { XINPUT_GAMEPAD_DPAD_LEFT, CONTROLLER_Left },
+        std::pair { XINPUT_GAMEPAD_DPAD_RIGHT, CONTROLLER_Right },
+        std::pair { XINPUT_GAMEPAD_START, CONTROLLER_Start },
+        std::pair { XINPUT_GAMEPAD_BACK, CONTROLLER_Back },
+        std::pair { XINPUT_GAMEPAD_LEFT_SHOULDER, CONTROLLER_LB },
+        std::pair { XINPUT_GAMEPAD_RIGHT_SHOULDER, CONTROLLER_RB },
+        std::pair { XINPUT_GAMEPAD_A, CONTROLLER_A },
+        std::pair { XINPUT_GAMEPAD_B, CONTROLLER_B },
+        std::pair { XINPUT_GAMEPAD_X, CONTROLLER_X },
+        std::pair { XINPUT_GAMEPAD_Y, CONTROLLER_Y },
+        std::pair { -1, CONTROLLER_LT },
+        std::pair { -1, CONTROLLER_RT },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_UP },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_DOWN },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_LEFT },
+        std::pair { -1, CONTROLLER_LTHUMBSTICK_RIGHT },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_UP },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_DOWN },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_LEFT },
+        std::pair { -1, CONTROLLER_RTHUMBSTICK_RIGHT }
+    };
+
+    if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
+    bool xinputWorks = false;
+
+    do {
+        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+
+        DWORD dwResult;    
+        for (DWORD i = 0; i < XUSER_MAX_COUNT; i++ ) {
+            XINPUT_STATE state;
+            dwResult = XInputGetState(i, &state);
+            
+            // controller not connected
+            if (dwResult != ERROR_SUCCESS) {
+                continue;
+            }
+
+            xinputWorks = true;
+
+            // log::debug("thumbstick left: ({}, {}), right: ({}, {})", state.Gamepad.sThumbLX, state.Gamepad.sThumbLY, state.Gamepad.sThumbRX, state.Gamepad.sThumbRY);
+
+            for (auto& [xinputButton, ccButton] : xinputToCCKey) {
+                bool inputState;
+
+                bool buttonPressed = heldInputs.contains(ccButton);
+                // if it's not a joystick or trigger, we can just use & to check if the button is pressed
+                if (xinputButton != -1) {
+                    buttonPressed = state.Gamepad.wButtons & xinputButton;
+                } else { // otherwise we have to check the values
+                    switch (ccButton) {
+                    case CONTROLLER_LT:
+                        buttonPressed = state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                        break;
+                    case CONTROLLER_RT:
+                        buttonPressed = state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_UP:
+                        buttonPressed = state.Gamepad.sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_DOWN:
+                        buttonPressed = state.Gamepad.sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_LEFT:
+                        buttonPressed = state.Gamepad.sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_LTHUMBSTICK_RIGHT:
+                        buttonPressed = state.Gamepad.sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_UP:
+                        buttonPressed = state.Gamepad.sThumbRY > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_DOWN:
+                        buttonPressed = state.Gamepad.sThumbRY < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_LEFT:
+                        buttonPressed = state.Gamepad.sThumbRX < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    case CONTROLLER_RTHUMBSTICK_RIGHT:
+                        buttonPressed = state.Gamepad.sThumbRX > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+                        break;
+                    default:
+                        // shouldn't be possible, just to prevent warnings
+                        continue;
+                    }
+                }
+
+                if (buttonPressed) {
+                    if (heldInputs.contains(ccButton)) continue; // skip if already held
+                    heldInputs.emplace(ccButton);
+                    inputState = Press;
+                } else {
+                    if (!heldInputs.contains(ccButton)) continue; // skip if not held
+                    heldInputs.erase(ccButton);
+                    inputState = Release;
+                }
+
+                LARGE_INTEGER time;
+                QueryPerformanceCounter(&time);
+                PlayerButton inputType;
+                bool player1 = true;
+
+                {
+                    std::lock_guard lock(keybindsLock);
+
+                    if (inputBinds[p1Jump].contains(ccButton)) inputType = PlayerButton::Jump;
+                    else if (inputBinds[p1Left].contains(ccButton)) inputType = PlayerButton::Left;
+                    else if (inputBinds[p1Right].contains(ccButton)) inputType = PlayerButton::Right;
+                    else {
+                        player1 = false;
+                        if (inputBinds[p2Jump].contains(ccButton)) inputType = PlayerButton::Jump;
+                        else if (inputBinds[p2Left].contains(ccButton)) inputType = PlayerButton::Left;
+                        else if (inputBinds[p2Right].contains(ccButton)) inputType = PlayerButton::Right;
+                        else continue;
+                    }
+                }
+                {
+                    std::lock_guard lock(inputQueueLock);
+                    inputQueue.emplace_back(InputEvent{ timestampFromLarge(time), inputType, inputState, player1 });
+                }
+            }
+        }
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::chrono::nanoseconds elapsed = end - start;
+        // reduce lag, inputs should still be accurate to 1/2000th of a second
+        std::this_thread::sleep_for(std::chrono::nanoseconds(500000) - elapsed);
+        while (softToggle.load()) { // reduce lag while mod is disabled
+            Sleep(2000);
+        }
+    } while (xinputWorks);
+
+    if (!xinputWorks) {
+        log::error("Xinput failed to read any controllers");
+    }
 }
 
 // notify the player if theres an issue with input on Linux
@@ -190,6 +340,17 @@ class $modify(CreatorLayer) {
 };
 
 void linuxCheckInputs() {
+	static std::unordered_map<int, enumKeyCodes> linuxToCCKey = {
+		{ BTN_A, CONTROLLER_A },
+		{ BTN_B, CONTROLLER_B },
+		{ BTN_X, CONTROLLER_X },
+		{ BTN_Y, CONTROLLER_Y },
+		{ BTN_TL, CONTROLLER_LB },
+		{ BTN_TR, CONTROLLER_RB },
+		{ BTN_SELECT, CONTROLLER_Back },
+		{ BTN_START, CONTROLLER_Start },
+	};
+
 	DWORD waitResult = WaitForSingleObject(hMutex, 1);
 	if (waitResult == WAIT_OBJECT_0) {
 		LinuxInputEvent* events = static_cast<LinuxInputEvent*>(pBuf);
@@ -198,17 +359,22 @@ void linuxCheckInputs() {
 
 			InputEvent input;
 			bool player1 = true;
-
 			USHORT scanCode = events[i].code;
-			if (scanCode == 0x3110) { // left click
-				input.inputType = PlayerButton::Jump;
-			}
-			else if (scanCode == 0x3111) { // right click
-				if (!enableRightClick.load()) continue;
-				input.inputType = PlayerButton::Jump;
-				player1 = false;
-			}
-			else {
+			int value = events[i].value;
+
+			switch (events[i].deviceType) {
+			case MOUSE:
+			case TOUCHPAD:
+				if (scanCode == BUTTON_LEFT) {
+					input.inputType = PlayerButton::Jump;
+				}
+				else if (scanCode == BUTTON_RIGHT) {
+					if (!enableRightClick.load()) continue;
+					input.inputType = PlayerButton::Jump;
+					player1 = false;
+				}
+				break;
+			case KEYBOARD: {
 				USHORT keyCode = MapVirtualKeyExA(scanCode, MAPVK_VSC_TO_VK, GetKeyboardLayout(0));
 				if (inputBinds[p1Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
 				else if (inputBinds[p1Left].contains(keyCode)) input.inputType = PlayerButton::Left;
@@ -220,9 +386,112 @@ void linuxCheckInputs() {
 					else if (inputBinds[p2Right].contains(keyCode)) input.inputType = PlayerButton::Right;
 					else continue;
 				}
+				break;
+			}
+			case TOUCHSCREEN:
+				if (scanCode == BTN_TOUCH) { // touching screen
+					input.inputType = PlayerButton::Jump;
+				}
+				break;
+			case CONTROLLER: {
+				int keyCode = -1;
+				if (events[i].type == EV_KEY) {
+					keyCode = linuxToCCKey[scanCode];
+				} else if (events[i].type == EV_ABS) {
+					bool continueLoop = false;
+					auto analyze4Directions = [&] (int deadzone, enumKeyCodes negative, enumKeyCodes positive) {
+						if (events[i].value < -deadzone) {
+							keyCode = negative;
+							if (heldInputs.contains(negative)) {
+								continueLoop = true; // already held, ignore
+							}
+							value = Press;
+						} else if (events[i].value > deadzone) {
+							keyCode = positive;
+							if (heldInputs.contains(positive)) {
+								continueLoop = true; // already held, ignore
+							}
+							value = Press;
+						} else {
+							value = Release;
+							if (heldInputs.contains(negative)) {
+								keyCode = negative;
+							} else if (heldInputs.contains(positive)) {
+								keyCode = positive;
+							} else {
+								continueLoop = true; // continue cuz button was already released
+							}
+						}
+					};
+
+					switch (events[i].code) {
+					case ABS_X: // left thumbstick x
+						analyze4Directions(XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, CONTROLLER_LTHUMBSTICK_LEFT, CONTROLLER_LTHUMBSTICK_RIGHT);
+						break;
+					case ABS_Y: // left thumbstick y
+						analyze4Directions(XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, CONTROLLER_LTHUMBSTICK_UP, CONTROLLER_LTHUMBSTICK_DOWN);
+						break;
+					case ABS_RX: // right thumbstick x
+						analyze4Directions(XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, CONTROLLER_RTHUMBSTICK_LEFT, CONTROLLER_RTHUMBSTICK_RIGHT);
+						break;
+					case ABS_RY: // right thumbstick y
+						analyze4Directions(XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, CONTROLLER_RTHUMBSTICK_UP, CONTROLLER_RTHUMBSTICK_DOWN);
+						break;
+					case ABS_HAT0X: // dpadx
+						analyze4Directions(10, CONTROLLER_Left, CONTROLLER_Right);
+						break;
+					case ABS_HAT0Y: // dpady
+						analyze4Directions(10, CONTROLLER_Up, CONTROLLER_Down);
+						break;
+					case ABS_Z:
+						keyCode = CONTROLLER_LT;
+						if (events[i].value > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+							value = Press;
+						} else {
+							value = Release;
+						}
+						break;
+					case ABS_RZ:
+						keyCode = CONTROLLER_RT;
+						if (events[i].value > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+							value = Press;
+						} else {
+							value = Release;
+						}
+						break;
+					}
+					if (continueLoop) continue;
+				}
+				if (inputBinds[p1Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+				else if (inputBinds[p1Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+				else if (inputBinds[p1Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+				else {
+					player1 = false;
+					if (inputBinds[p2Jump].contains(keyCode)) input.inputType = PlayerButton::Jump;
+					else if (inputBinds[p2Left].contains(keyCode)) input.inputType = PlayerButton::Left;
+					else if (inputBinds[p2Right].contains(keyCode)) input.inputType = PlayerButton::Right;
+					else continue;
+				}
+				if (value == Press) {
+					if (heldInputs.contains(keyCode)) {
+						continue; // already held, ignore
+					} else {
+						heldInputs.emplace(keyCode);
+					}
+				} else {
+					if (!heldInputs.contains(keyCode)) {
+						continue; // already released, ignore
+					} else {
+						heldInputs.erase(keyCode);
+					}
+				}
+				break;
+			}
+			default:
+				continue;
 			}
 
-			input.inputState = events[i].value;
+			input.inputState = value;
 			input.time = timestampFromLarge(events[i].time);
 			input.isPlayer1 = player1;
 
@@ -307,6 +576,9 @@ void windowsSetup() {
 	}
 
 	if (!linuxNative) {
-		std::thread(inputThread).detach();
+		std::thread(rawInputThread).detach();
+		if (CCApplication::get()->getControllerConnected()) {
+			std::thread(xinputThread).detach();
+		}
 	}
 }
