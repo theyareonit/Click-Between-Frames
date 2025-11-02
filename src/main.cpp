@@ -39,6 +39,7 @@ bool skipUpdate = true; // true -> dont split steps during PlayerObject::update(
 bool enableInput = false;
 bool linuxNative = false;
 bool lateCutoff; // false -> ignore inputs that happen after the start of the frame; true -> check for inputs at the latest possible moment
+bool useCustomKeybinds = false;
 
 std::array<std::unordered_set<size_t>, 6> inputBinds;
 std::unordered_set<uint16_t> heldInputs;
@@ -141,37 +142,51 @@ Step popStepQueue() {
 }
 
 #ifdef GEODE_IS_WINDOWS
-#include <geode.custom-keybinds/include/Keybinds.hpp>
+#include <geode.custom-keybinds/include/OptionalAPI.hpp>
 /*
 send list of keybinds to the input thread
 */
 void updateKeybinds() {
-	std::array<std::unordered_set<size_t>, 6> binds;
-	std::vector<geode::Ref<keybinds::Bind>> v;
-
 	enableRightClick.store(Mod::get()->getSettingValue<bool>("right-click"));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(v[i]->getHash());
+	auto* mod = Loader::get()->getLoadedMod("geode.custom-keybinds");
+	useCustomKeybinds = mod && mod->isEnabled();
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(v[i]->getHash());
+	if (!useCustomKeybinds) {
+		std::lock_guard lock(keybindsLock);
+		// controller ones probably dont do anything but lets match CK
+		inputBinds[p1Jump] = { KEY_Space, KEY_W, CONTROLLER_A, CONTROLLER_Up, CONTROLLER_RB };
+		inputBinds[p1Left] = { KEY_A, CONTROLLER_Left, CONTROLLER_LTHUMBSTICK_LEFT };
+		inputBinds[p1Right] = { KEY_D, CONTROLLER_Right, CONTROLLER_LTHUMBSTICK_RIGHT };
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(v[i]->getHash());
+		inputBinds[p2Jump] = { KEY_Up, CONTROLLER_LB };
+		inputBinds[p2Left] = { KEY_Left, CONTROLLER_RTHUMBSTICK_LEFT };
+		inputBinds[p2Right] = { KEY_Right, CONTROLLER_RTHUMBSTICK_RIGHT };
+		return;
+	}
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(v[i]->getHash());
+	std::array<std::unordered_set<size_t>, 6> bindsSet;
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(v[i]->getHash());
+	const auto loadBinds = [&](int key, std::string const& id) -> geode::Result<> {
+		GEODE_UNWRAP_INTO(auto binds, keybinds::BindManagerV2::getBindsFor(id));
+		for (auto const& bind : binds) {
+			// this should probably be using Keybind::getKey instead of getHash,
+			// but no way to call that from the optional api atm
+			bindsSet[key].emplace(bind->getHash());
+		}
+		return Ok();
+	};
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
+	(void) loadBinds(p1Jump, "robtop.geometry-dash/jump-p1");
+	(void) loadBinds(p1Left, "robtop.geometry-dash/move-left-p1");
+	(void) loadBinds(p1Right, "robtop.geometry-dash/move-right-p1");
+	(void) loadBinds(p2Jump, "robtop.geometry-dash/jump-p2");
+	(void) loadBinds(p2Left, "robtop.geometry-dash/move-left-p2");
+	(void) loadBinds(p2Right, "robtop.geometry-dash/move-right-p2");
 
 	{
 		std::lock_guard lock(keybindsLock);
-		inputBinds = binds;
+		inputBinds = std::move(bindsSet);
 	}
 }
 #endif
