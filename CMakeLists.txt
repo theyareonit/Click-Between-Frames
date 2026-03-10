@@ -12,19 +12,9 @@ project(ClickBetweenFrames VERSION 1.0.0)
 
 add_library(${PROJECT_NAME} SHARED
     "src/main.cpp"
+    "src/2.2801inputQueue.cpp"
 )
 
-if (WIN32)
-    target_sources(${PROJECT_NAME} PRIVATE src/windows.cpp)
-else()
-    if(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
-        target_sources(${PROJECT_NAME} PRIVATE src/android.cpp)
-    elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR ${CMAKE_SYSTEM_NAME} STREQUAL "iOS")
-        target_sources(${PROJECT_NAME} PRIVATE src/apple.mm)
-        set_source_files_properties(src/apple.mm PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-    endif()
-    target_sources(${PROJECT_NAME} PRIVATE src/notwindows.cpp)
-endif()
 
 if (NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
