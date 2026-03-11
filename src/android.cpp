@@ -60,11 +60,11 @@ class $modify(CCTouchDispatcher) {
 
 #include <Geode/modify/CCKeyboardDispatcher.hpp>
 class $modify(CCKeyboardDispatcher) {
-	bool dispatchKeyboardMSG(enumKeyCodes key, bool isKeyDown, bool isKeyRepeat) {
+	bool dispatchKeyboardMSG(enumKeyCodes key, bool isKeyDown, bool isKeyRepeat, double p) {
 		// used in GJBaseGameLayer::queueButton hook
 		pendingInputTimestamp = lastTimestamp;
 		lastTimestamp = 0;
-		bool r = CCKeyboardDispatcher::dispatchKeyboardMSG(key, isKeyDown, isKeyRepeat);
+		bool r = CCKeyboardDispatcher::dispatchKeyboardMSG(key, isKeyDown, isKeyRepeat, p);
 		pendingInputTimestamp = 0;
 		return r;
 	}
