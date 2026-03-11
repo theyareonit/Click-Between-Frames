@@ -4,7 +4,7 @@ TimestampType pendingInputTimestamp = 0;
 
 #include <Geode/modify/GJBaseGameLayer.hpp>
 class $modify(GJBaseGameLayer) {
-	void queueButton(int button, bool push, bool isPlayer2) {
+	void queueButton(int button, bool push, bool isPlayer2, double t) {
 		if (!softToggle.load() && pendingInputTimestamp) {
 			std::lock_guard lock(inputQueueLock);
 			inputQueue.emplace_back(InputEvent {
@@ -15,6 +15,6 @@ class $modify(GJBaseGameLayer) {
 			});
 		}
 
-		GJBaseGameLayer::queueButton(button, push, isPlayer2);
+		GJBaseGameLayer::queueButton(button, push, isPlayer2, t);
 	}
 };
