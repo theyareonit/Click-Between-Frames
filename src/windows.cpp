@@ -1,5 +1,4 @@
 #include "includes.hpp"
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 TimestampType getCurrentTimestamp() {
 	LARGE_INTEGER t;
@@ -92,7 +91,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return 0;
 
-				queueInMainThread([inputState]() {keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", inputState).post();});
+				queueInMainThread([inputState]() {
+					auto* pl = PlayLayer::get();
+					// check for fake playlayers
+					if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
+					pl->queueButton(1, inputState, true);
+					pl->m_uiLayer->m_p2Jumping = inputState;
+				});
 			}
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
