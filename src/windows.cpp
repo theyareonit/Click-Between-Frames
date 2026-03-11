@@ -103,13 +103,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
 				else return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 
-				/*queueInMainThread([inputState]() {
+				queueInMainThread([inputState]() {
 					auto* pl = PlayLayer::get();
 					// check for fake playlayers
 					if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
 					pl->queueButton(1, inputState, true, 0);
 					pl->m_uiLayer->m_p2Jumping = inputState;
-				});*/
+				});
 			};
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
