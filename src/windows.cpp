@@ -10,10 +10,25 @@ TimestampType getCurrentTimestamp() {
 	}
 	return t.QuadPart;
 }
-
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LPVOID pBuf;
 HANDLE hSharedMem = NULL;
 HANDLE hMutex = NULL;
+static HWND g_rawInputHWND, g_mainWindowHWND;
+static WNDPROC g_originalRawInputProc = nullptr;
+ static void attemptHookRawInput() { // this is stolen from geode hehe
+        g_rawInputHWND = FindWindowW(L"GD_RawInput", nullptr);
+        if (!g_rawInputHWND) {
+            // in case it takes more than 1 frame, try getting the window again next frame
+            queueInMainThread([]{ attemptHookRawInput(); });
+            return;
+        }
+
+        g_originalRawInputProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
+            g_rawInputHWND, GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(WindowProc)
+        ));
+    }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LARGE_INTEGER time;
@@ -24,13 +39,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	LPVOID pData;
 	switch (uMsg) {
 	case WM_INPUT: {
-
 		UINT dwSize;
 		GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
 
 		auto lpb = std::unique_ptr<BYTE[]>(new BYTE[dwSize]);
 		if (!lpb) {
-			return 0;
+			return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 		}
 		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb.get(), &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
 			log::debug("GetRawInputData does not return correct size");
@@ -48,7 +62,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
-				if (inputState) return 0;
+				if (inputState) return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 				else heldInputs.erase(vkey);
 			}
 
@@ -57,7 +71,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 			{
 				std::lock_guard lock(keybindsLock);
-
 				if (inputBinds[p1Jump].contains(vkey)) inputType = PlayerButton::Jump;
 				else if (inputBinds[p1Left].contains(vkey)) inputType = PlayerButton::Left;
 				else if (inputBinds[p1Right].contains(vkey)) inputType = PlayerButton::Right;
@@ -71,8 +84,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			}
 
 			if (inputState) heldInputs.emplace(vkey);
-			if (!shouldEmplace) return 0;
-
+			if (!shouldEmplace)  return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 			break;
 		}
 		case RIM_TYPEMOUSE: {
@@ -86,80 +98,55 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			else if (flags & RI_MOUSE_BUTTON_1_UP) inputState = Release;
 			else {
 				player1 = false;
-				if (!enableRightClick.load()) return 0;
+				if (!enableRightClick.load()) return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
-				else return 0;
+				else return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 
-				queueInMainThread([inputState]() {
+				/*queueInMainThread([inputState]() {
 					auto* pl = PlayLayer::get();
 					// check for fake playlayers
 					if (pl == nullptr || pl != CCScene::get()->getChildByType<PlayLayer*>(0)) return;
-					pl->queueButton(1, inputState, true);
+					pl->queueButton(1, inputState, true, 0);
 					pl->m_uiLayer->m_p2Jumping = inputState;
-				});
-			}
+				});*/
+			};
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
 			break;
 		}
 		default:
-			return 0;
+			 return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 		}
 		break;
 	}
 	default:
-		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+		 return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
 	}
-
 	{
 		std::lock_guard lock(inputQueueLock);
 		inputQueue.emplace_back(InputEvent{ timestampFromLarge(time), inputType, inputState, player1 });
 	}
-
-	return 0;
+	return CallWindowProcW(g_originalRawInputProc, hwnd, uMsg, wParam, lParam);
+	//return 0;
 }
 
 void rawInputThread() {
+	queueInMainThread([]{ attemptHookRawInput(); });
 	WNDCLASS wc = {};
 	wc.lpfnWndProc = WindowProc;
 	wc.hInstance = GetModuleHandleA(NULL);
 	wc.lpszClassName = "CBF";
 
-	RegisterClass(&wc);
-	HWND hwnd = CreateWindow("CBF", "Raw Input Window", 0, 0, 0, 0, 0, HWND_MESSAGE, 0, wc.hInstance, 0);
-	if (!hwnd) {
-		const DWORD err = GetLastError();
-		log::error("Failed to create raw input window: {}", err);
-		return;
+	if(!RegisterClassA(&wc)) {
+		DWORD err = GetLastError();
+		if(err == ERROR_CLASS_ALREADY_EXISTS) {
+			log::debug("input already exits");
+		} else {
+			// Handle other errors
+		}
 	}
-
-	RAWINPUTDEVICE dev[2];
-	dev[0].usUsagePage = 0x01;        // generic desktop controls
-	dev[0].usUsage = 0x02;            // mouse
-	dev[0].dwFlags = RIDEV_INPUTSINK; // allow inputs without being in the foreground
-	dev[0].hwndTarget = hwnd;         // raw input window
-
-	dev[1].usUsagePage = 0x01;
-	dev[1].usUsage = 0x06;            // keyboard
-	dev[1].dwFlags = RIDEV_INPUTSINK;
-	dev[1].hwndTarget = hwnd;
-
-	if (!RegisterRawInputDevices(dev, 2, sizeof(dev[0]))) {
-		log::error("Failed to register raw input devices");
-		return;
-	}
-
 	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-
-	MSG msg;
-    while (GetMessage(&msg, hwnd, 0, 0)) {
-        DispatchMessage(&msg);
-        while (softToggle.load()) { // reduce lag while mod is disabled
-            Sleep(2000);
-            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
-        }
-    }
 }
 
 void xinputThread() {
