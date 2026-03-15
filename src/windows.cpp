@@ -1,5 +1,4 @@
 #include "includes.hpp"
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 
 TimestampType getCurrentTimestamp() {
 	LARGE_INTEGER t;
@@ -31,7 +30,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 		auto lpb = std::unique_ptr<BYTE[]>(new BYTE[dwSize]);
 		if (!lpb) {
-			return 0;
+			return DefWindowProc(hwnd, uMsg, wParam, lParam);
 		}
 		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb.get(), &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
 			log::debug("GetRawInputData does not return correct size");
@@ -49,7 +48,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
-				if (inputState) return 0;
+				if (inputState) return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
 				else heldInputs.erase(vkey);
 			}
 
@@ -72,7 +71,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			}
 
 			if (inputState) heldInputs.emplace(vkey);
-			if (!shouldEmplace) return 0;
+			if (!shouldEmplace) return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
 
 			break;
 		}
@@ -90,21 +89,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				if (!enableRightClick.load()) return 0;
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
-				else return 0;
+				else return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
 
-				queueInMainThread([inputState]() {keybinds::InvokeBindEvent("robtop.geometry-dash/jump-p2", inputState).post();});
+				queueInMainThread([inputState, time]() {
+						geode::Mod *customKeybinds = geode::Loader::get()->getLoadedMod("geode.custom-keybinds");
+						geode::Keybind k = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("jump-p2")[0];
+						KeybindSettingPressedEventV3(Loader::get()->getLoadedMod("geode.custom-keybinds"), "jump-p2").send(k, inputState == Press, false, timestampFromLarge(time));
+				});
 			}
 
 			QueryPerformanceCounter(&time); // dont call on mouse move events
 			break;
 		}
 		default:
-			return 0;
+			return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
 		}
 		break;
 	}
 	default:
-		return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 
 	{
@@ -112,22 +115,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		inputQueue.emplace_back(InputEvent{ timestampFromLarge(time), inputType, inputState, player1 });
 	}
 
-	return 0;
+	return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
 }
 
 void rawInputThread() {
-	WNDCLASS wc = {};
-	wc.lpfnWndProc = WindowProc;
-	wc.hInstance = GetModuleHandleA(NULL);
-	wc.lpszClassName = "CBF";
-
-	RegisterClass(&wc);
-	HWND hwnd = CreateWindow("CBF", "Raw Input Window", 0, 0, 0, 0, 0, HWND_MESSAGE, 0, wc.hInstance, 0);
-	if (!hwnd) {
-		const DWORD err = GetLastError();
-		log::error("Failed to create raw input window: {}", err);
-		return;
-	}
+	HWND hwnd = FindWindow("GD_RawInput", "GD Raw Input Window"); // :eye:
 
 	RAWINPUTDEVICE dev[2];
 	dev[0].usUsagePage = 0x01;        // generic desktop controls
@@ -147,12 +139,14 @@ void rawInputThread() {
 
 	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
+	HANDLE hThread = OpenThread(THREAD_SET_INFORMATION, FALSE, GetWindowThreadProcessId(hwnd, nullptr));
+	SetThreadPriority(hThread, THREAD_PRIORITY_ABOVE_NORMAL);
+
 	MSG msg;
-    while (GetMessage(&msg, hwnd, 0, 0)) {
+    while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
         DispatchMessage(&msg);
         while (softToggle.load()) { // reduce lag while mod is disabled
             Sleep(2000);
-            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)); // clear all pending messages
         }
     }
 }

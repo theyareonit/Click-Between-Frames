@@ -1,10 +1,7 @@
 {
-	"geode": "4.7.0",
+	"geode": "5.3.0",
 	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"win": "2.2081"
 	},
 	"version": "v1.4.6",
 	"id": "syzzi.click_between_frames",
@@ -14,7 +11,7 @@
 	"dependencies": {
 		"geode.custom-keybinds": {
 			"importance": "required",
-			"version": ">=v1.10.0",
+			"version": ">=v2.0.0",
 			"platforms": ["win"]
 		}
 	},
@@ -93,7 +90,7 @@
 		},
 		"physics-bypass": {
 			"name": "Enable Physics Bypass",
-			"description": "Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
+			"description": "(CURRENTLY DOES NOT WORK) Reduces stuttering on some FPS values. Active even if \"Disable CBF\" is checked.\n\nTHIS WILL ALTER PHYSICS AND MAY BREAK SOME LEVELS! DON'T USE THIS IF YOUR LIST/LEADERBOARD BANS PHYSICS BYPASS!",
 			"type": "bool",
 			"default": false,
 			"platforms": ["win"]

@@ -141,33 +141,37 @@ Step popStepQueue() {
 }
 
 #ifdef GEODE_IS_WINDOWS
-#include <geode.custom-keybinds/include/Keybinds.hpp>
+size_t getKeybindHash(const geode::Keybind &key) {
+		return key.key | (static_cast<size_t>(key.modifiers.value) << 29);
+}
+
 /*
 send list of keybinds to the input thread
 */
 void updateKeybinds() {
 	std::array<std::unordered_set<size_t>, 6> binds;
-	std::vector<geode::Ref<keybinds::Bind>> v;
-
+	std::vector<geode::Keybind> v;
+	geode::Mod *customKeybinds = geode::Loader::get()->getLoadedMod("geode.custom-keybinds");
+	
 	enableRightClick.store(Mod::get()->getSettingValue<bool>("right-click"));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("jump-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(getKeybindHash(v[i]));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-left-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(getKeybindHash(v[i]));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-right-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(getKeybindHash(v[i]));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("jump-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(getKeybindHash(v[i]));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-left-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(getKeybindHash(v[i]));
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-right-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(getKeybindHash(v[i]));
 
 	{
 		std::lock_guard lock(keybindsLock);
@@ -353,12 +357,12 @@ class $modify(GJBaseGameLayer) {
 		return modifiedDelta;
 	}
 
-	void processCommands(float p0) {
+	void processCommands(float p0, bool p1, bool p2) {
 		if (clickOnSteps && !stepQueue.empty()) {
 			Step step;
 			do step = popStepQueue(); while (!stepQueue.empty() && !step.endStep); // process 1 step (or more if theres an input)
 		}
-		GJBaseGameLayer::processCommands(p0);
+		GJBaseGameLayer::processCommands(p0, p1, p2);
 	}
 
 	float getModifiedDelta(float delta) {
@@ -587,15 +591,8 @@ void togglePhysicsBypass(bool enable) {
 
 void toggleMod(bool disable) {
 #if defined(GEODE_IS_WINDOWS) || defined(GEODE_IS_ANDROID64)
-	void* addr = reinterpret_cast<void*>(geode::base::get() + GEODE_WINDOWS(0x607230) GEODE_ANDROID64(0x5c00d0));
-
-	static Patch* modPatch = nullptr;
-	if (!modPatch) modPatch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
-
-	if (disable) {
-		(void) modPatch->disable();
-	} else {
-		(void) modPatch->enable();
+	if (!disable) {
+		GameManager::sharedState()->setGameVariable(GameVar::ClickBetweenSteps, false);
 	}
 #endif
 
@@ -606,33 +603,33 @@ $on_mod(Loaded) {
 	Mod::get()->setSavedValue<bool>("is-linux", false);
 
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
-	listenForSettingChanges("soft-toggle", toggleMod);
+	listenForSettingChanges<bool>("soft-toggle", toggleMod);
 
-	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
-	listenForSettingChanges("physics-bypass", togglePhysicsBypass);
+	//togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
+	//listenForSettingChanges<bool>("physics-bypass", togglePhysicsBypass);
 
 	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
-	listenForSettingChanges("bypass-mode", +[](std::string mode) {
+	listenForSettingChanges<std::string>("bypass-mode", +[](std::string mode) {
 		legacyBypass = mode == "2.1";
 	});
 
 	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
-	listenForSettingChanges("safe-mode", +[](bool enable) {
+	listenForSettingChanges<bool>("safe-mode", +[](bool enable) {
 		safeMode = enable;
 	});
 
 	clickOnSteps = Mod::get()->getSettingValue<bool>("click-on-steps");
-	listenForSettingChanges("click-on-steps", +[](bool enable) {
+	listenForSettingChanges<bool>("click-on-steps", +[](bool enable) {
 		clickOnSteps = enable;
 	});
 
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
-	listenForSettingChanges("mouse-fix", +[](bool enable) {
+	listenForSettingChanges<bool>("mouse-fix", +[](bool enable) {
 		mouseFix = enable;
 	});
 
 	lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
-	listenForSettingChanges("late-cutoff", +[](bool enable) {
+	listenForSettingChanges<bool>("late-cutoff", +[](bool enable) {
 		lateCutoff = enable;
 	});
 
