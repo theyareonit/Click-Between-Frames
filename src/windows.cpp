@@ -14,12 +14,17 @@ TimestampType getCurrentTimestamp() {
 LPVOID pBuf;
 HANDLE hSharedMem = NULL;
 HANDLE hMutex = NULL;
+WNDPROC gdWindowProc;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LARGE_INTEGER time;
 	PlayerButton inputType;
 	bool inputState;
 	bool player1;
+
+	if (softToggle.load()) {
+			return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
+	}
 
 	LPVOID pData;
 	switch (uMsg) {
@@ -30,7 +35,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 		auto lpb = std::unique_ptr<BYTE[]>(new BYTE[dwSize]);
 		if (!lpb) {
-			return DefWindowProc(hwnd, uMsg, wParam, lParam);
+			return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 		}
 		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb.get(), &dwSize, sizeof(RAWINPUTHEADER)) != dwSize) {
 			log::debug("GetRawInputData does not return correct size");
@@ -48,7 +53,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 			// cocos2d::enumKeyCodes corresponds directly to vkeys
 			if (heldInputs.contains(vkey)) {
-				if (inputState) return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
+				if (inputState) return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 				else heldInputs.erase(vkey);
 			}
 
@@ -71,8 +76,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			}
 
 			if (inputState) heldInputs.emplace(vkey);
-			if (!shouldEmplace) return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
-
+			if (!shouldEmplace) return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 			break;
 		}
 		case RIM_TYPEMOUSE: {
@@ -89,7 +93,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				if (!enableRightClick.load()) return 0;
 				if (flags & RI_MOUSE_BUTTON_2_DOWN) inputState = Press;
 				else if (flags & RI_MOUSE_BUTTON_2_UP) inputState = Release;
-				else return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
+				else return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 
 				queueInMainThread([inputState, time]() {
 						geode::Mod *customKeybinds = geode::Loader::get()->getLoadedMod("geode.custom-keybinds");
@@ -102,12 +106,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			break;
 		}
 		default:
-			return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
+			return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 		}
 		break;
 	}
 	default:
-		return DefWindowProc(hwnd, uMsg, wParam, lParam);
+		return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 	}
 
 	{
@@ -115,40 +119,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		inputQueue.emplace_back(InputEvent{ timestampFromLarge(time), inputType, inputState, player1 });
 	}
 
-	return DefRawInputProc(nullptr, 0, sizeof(RAWINPUTHEADER));
-}
-
-void rawInputThread() {
-	HWND hwnd = FindWindow("GD_RawInput", "GD Raw Input Window"); // :eye:
-
-	RAWINPUTDEVICE dev[2];
-	dev[0].usUsagePage = 0x01;        // generic desktop controls
-	dev[0].usUsage = 0x02;            // mouse
-	dev[0].dwFlags = RIDEV_INPUTSINK; // allow inputs without being in the foreground
-	dev[0].hwndTarget = hwnd;         // raw input window
-
-	dev[1].usUsagePage = 0x01;
-	dev[1].usUsage = 0x06;            // keyboard
-	dev[1].dwFlags = RIDEV_INPUTSINK;
-	dev[1].hwndTarget = hwnd;
-
-	if (!RegisterRawInputDevices(dev, 2, sizeof(dev[0]))) {
-		log::error("Failed to register raw input devices");
-		return;
-	}
-
-	if (threadPriority) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-
-	HANDLE hThread = OpenThread(THREAD_SET_INFORMATION, FALSE, GetWindowThreadProcessId(hwnd, nullptr));
-	SetThreadPriority(hThread, THREAD_PRIORITY_ABOVE_NORMAL);
-
-	MSG msg;
-    while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
-        DispatchMessage(&msg);
-        while (softToggle.load()) { // reduce lag while mod is disabled
-            Sleep(2000);
-        }
-    }
+	return CallWindowProc(gdWindowProc, hwnd, uMsg, wParam, lParam);
 }
 
 void xinputThread() {
@@ -570,7 +541,10 @@ void windowsSetup() {
 	}
 
 	if (!linuxNative) {
-		std::thread(rawInputThread).detach();
+		HWND hwnd = FindWindow("GD_RawInput", "GD Raw Input Window"); // :eye:
+		gdWindowProc = (WNDPROC)GetWindowLongPtr(hwnd, GWLP_WNDPROC);
+		SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)WindowProc);
+		
 		if (CCApplication::get()->getControllerConnected()) {
 			std::thread(xinputThread).detach();
 		}

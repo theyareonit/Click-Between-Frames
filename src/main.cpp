@@ -203,7 +203,7 @@ bool legacyBypass;
 determine the number of physics steps that happen on each frame,
 need to rewrite the vanilla formula bc otherwise you'd have to use inline assembly to get the step count
 */
-int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
+int calculateStepCount(double delta, float timewarp, bool forceVanilla) {
 	if (!physicsBypass || forceVanilla) { // vanilla 2.2
 		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from `(delta * 240) / timewarp` bc of float precision
 	}
@@ -336,7 +336,7 @@ class $modify(GJBaseGameLayer) {
 	}
 
 	// either use the modified delta to calculate the step count, or use the actual delta if physics bypass is enabled
-	float calculateSteps(float modifiedDelta) {
+	double calculateSteps(double modifiedDelta) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
@@ -365,7 +365,7 @@ class $modify(GJBaseGameLayer) {
 		GJBaseGameLayer::processCommands(p0, p1, p2);
 	}
 
-	float getModifiedDelta(float delta) {
+	double getModifiedDelta(float delta) {
 		return calculateSteps(GJBaseGameLayer::getModifiedDelta(delta));
 	}
 
@@ -555,7 +555,7 @@ class $modify(GJGameLevel) {
 };
 
 float Slerp2D(float p0, float p1, float p2) {
-	auto orig = reinterpret_cast<float (*)(float, float, float)>(geode::base::get() + 0x71ec0);
+	auto orig = reinterpret_cast<float (*)(float, float, float)>(geode::base::get() + 0x71ef0);
 	if (shipRotDelta != 0.0f) { // only do anything if Slerp2D is called within PlayerObject::updateShipRotation()
 		shipRotDelta *= p2 * 1024; // p2 is 1/1024 scaled by a constant factor, we need to multiply shipRotDelta by that factor
 		return orig(p0, p1, shipRotDelta);
@@ -565,7 +565,7 @@ float Slerp2D(float p0, float p1, float p2) {
 
 void togglePhysicsBypass(bool enable) {
 #ifdef GEODE_IS_WINDOWS
-	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x2322ca);
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x237a91);
 
 	static Patch* pbPatch = nullptr;
 	if (!pbPatch) {
@@ -590,12 +590,7 @@ void togglePhysicsBypass(bool enable) {
 }
 
 void toggleMod(bool disable) {
-#if defined(GEODE_IS_WINDOWS) || defined(GEODE_IS_ANDROID64)
-	if (!disable) {
-		GameManager::sharedState()->setGameVariable(GameVar::ClickBetweenSteps, false);
-	}
-#endif
-
+	if (!disable) GameManager::sharedState()->setGameVariable(GameVar::ClickBetweenSteps, false);
 	softToggle.store(disable);
 }
 
@@ -605,8 +600,8 @@ $on_mod(Loaded) {
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges<bool>("soft-toggle", toggleMod);
 
-	//togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
-	//listenForSettingChanges<bool>("physics-bypass", togglePhysicsBypass);
+	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
+	listenForSettingChanges<bool>("physics-bypass", togglePhysicsBypass);
 
 	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
 	listenForSettingChanges<std::string>("bypass-mode", +[](std::string mode) {
@@ -637,7 +632,7 @@ $on_mod(Loaded) {
 
 #ifdef GEODE_IS_WINDOWS
 	(void) Mod::get()->hook(
-		reinterpret_cast<void*>(geode::base::get() + 0x71ec0),
+		reinterpret_cast<void*>(geode::base::get() + 0x71ef0),
 		Slerp2D,
 		"Slerp2D",
 		tulip::hook::TulipConvention::Default
