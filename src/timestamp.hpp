@@ -30,7 +30,7 @@ inline TimestampType getCurrentTimestamp() {
 	return static_cast<TimestampType>(now.tv_sec) + (static_cast<TimestampType>(now.tv_nsec) / 1'000'000'000);
 }
 
-#elif defined(GEODE_IS_MAC) || defined(GEODE_IS_IOS)
+#elif defined(GEODE_IS_MACOS) || defined(GEODE_IS_IOS)
 
 #include <time.h>
 
