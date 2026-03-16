@@ -97,7 +97,6 @@ void buildStepQueue(int stepCount) {
 /*
 return the first step in the queue,
 also check if an input happened on the previous step, if so run handleButton.
-tbh this doesnt need to be a separate function from the PlayerObject::update() hook
 */
 Step popStepQueue() {
 	if (stepQueue.empty()) return EMPTY_STEP;
@@ -317,7 +316,10 @@ class $modify(GJBaseGameLayer) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (physicsBypass && (!firstFrame || softToggle)) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (physicsBypass) {
+				if (softToggle) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+				else if (!firstFrame) modifiedDelta = (currentFrameTime - lastFrameTime) * timewarp;
+			}
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
@@ -580,6 +582,7 @@ void toggleMod(bool disable) {
 
 	softToggle = disable;
 
+	// for mod menus that let you toggle cbf mid-attempt
 	PlayLayer* pl = PlayLayer::get();
 	if (pl) {
 		if (!softToggle) {
