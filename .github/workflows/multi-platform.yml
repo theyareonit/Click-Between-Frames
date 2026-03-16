@@ -7,7 +7,31 @@ on:
       - "**"
 
 jobs:
+  build-linux-input:
+    name: Build linux-input.so
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y g++ libevdev-dev
+
+      - name: Build
+        working-directory: src/linux
+        run: g++ -O2 -o ../../resources/linux-input.so linux-input.cpp -levdev
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-input.so
+          path: resources/linux-input.so
+
   build:
+    needs: ['build-linux-input']
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +59,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download linux-input.so
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-input.so
+          path: resources
 
       - name: Build the mod
         uses: geode-sdk/build-geode-mod@main
