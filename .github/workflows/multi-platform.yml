@@ -27,6 +27,11 @@ jobs:
           mkdir -p ../../resources
           g++ -O2 -o ../../resources/linux-input.so linux-input.cpp -levdev
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-input.so
+          path: resources/linux-input.so
+
   build:
     needs: ['build-linux-input']
     strategy:
