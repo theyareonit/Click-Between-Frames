@@ -123,7 +123,21 @@ prepare list of keybinds for linux
 void updateKeybinds() {
 	std::array<std::unordered_set<size_t>, 6> binds;
 	std::vector<geode::Keybind> v;
-	Mod* customKeybinds = Loader::get()->getInstalledMod("geode.custom-keybinds");
+	Mod* customKeybinds = Loader::get()->getLoadedMod("geode.custom-keybinds");
+	if (!customKeybinds) {
+		static bool checked = 0;
+		if (!checked) log::info("Custom keybinds not loaded.");
+		checked = 1;
+		
+		inputBinds[p1Jump] = { KEY_Space, KEY_W, CONTROLLER_A, CONTROLLER_Up, CONTROLLER_RB };
+		inputBinds[p1Left] = { KEY_A, CONTROLLER_Left, CONTROLLER_LTHUMBSTICK_LEFT };
+		inputBinds[p1Right] = { KEY_D, CONTROLLER_Right, CONTROLLER_LTHUMBSTICK_RIGHT };
+
+		inputBinds[p2Jump] = { KEY_Up, CONTROLLER_LB };
+		inputBinds[p2Left] = { KEY_Left, CONTROLLER_RTHUMBSTICK_LEFT };
+		inputBinds[p2Right] = { KEY_Right, CONTROLLER_RTHUMBSTICK_RIGHT };
+		return;
+	}
 
 	enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
 
@@ -204,7 +218,7 @@ bool safeMode;
 class $modify(PlayLayer) {
 	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
 		#ifdef GEODE_IS_WINDOWS
-		updateKeybinds(); // update keybinds when you enter a level (for linux)
+		if (linuxNative) updateKeybinds(); // update keybinds when you enter a level (for linux)
 		#endif
 		bool result = PlayLayer::init(level, useReplay, dontCreateObjects);
 		this->m_clickBetweenSteps = false;
@@ -249,7 +263,7 @@ void onFrameStart() {
 	{
 		firstFrame = true;
 		skipUpdate = true;
-		inputVector = {};
+		inputVector.clear();
 	}
 	#ifdef GEODE_IS_WINDOWS
 	if (mouseFix && !skipUpdate) { // reduce lag with high polling rate mice by limiting the number of mouse movements per frame to 1
