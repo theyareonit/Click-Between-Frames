@@ -231,6 +231,10 @@ class $modify(PlayLayer) {
 bool mouseFix;
 
 void onFrameStart() {
+	#ifdef GEODE_IS_WINDOWS
+	if (linuxNative) linuxHeartbeat();
+	#endif
+
 	PlayLayer* playLayer = PlayLayer::get();
 	CCNode* par;
 

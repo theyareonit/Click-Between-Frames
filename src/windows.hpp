@@ -22,13 +22,8 @@ struct __attribute__((packed)) LinuxInputEvent {
 
 extern LARGE_INTEGER freq;
 
-extern HANDLE hSharedMem;
-extern HANDLE hMutex;
-extern LPVOID pBuf;
-
 extern bool linuxNative;
-
-constexpr size_t BUFFER_SIZE = 20;
 
 void windowsSetup();
 void linuxCheckInputs();
+void linuxHeartbeat();

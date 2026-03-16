@@ -1,22 +1,23 @@
-#include <libevdev-1.0/libevdev/libevdev.h> // thankfully this can be put before windows.h, it bugs otherwise
+#include <libevdev-1.0/libevdev/libevdev.h>
 #include <linux/input-event-codes.h>
-#include <windows.h> // winelib lets you use both windows and linux apis
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
 #include <dirent.h>
+#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
 #include <sys/inotify.h>
-#include <bits/stdc++.h>
 
 #include <iostream>
 #include <cstring>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <atomic>
 #include <array>
+#include <algorithm>
 
 enum DeviceType : int8_t {
     MOUSE,
@@ -28,32 +29,40 @@ enum DeviceType : int8_t {
 };
 
 struct __attribute__((packed)) LinuxInputEvent {
-    LARGE_INTEGER time;
-    USHORT type;
-    USHORT code;
-    int value;
+    int64_t time;
+    uint16_t type;
+    uint16_t code;
+    int32_t value;
     DeviceType deviceType;
 };
 
-constexpr size_t BUFFER_SIZE = 20;
+constexpr size_t RING_BUFFER_SIZE = 256;
+
+struct __attribute__((packed)) SharedMemory {
+    volatile uint32_t head;
+    volatile uint32_t tail;
+    volatile uint32_t error_flag;
+    volatile uint32_t heartbeat;
+    LinuxInputEvent events[RING_BUFFER_SIZE];
+};
+
 constexpr int MAX_EVENTS = 10;
+constexpr int WATCHDOG_TIMEOUT_SECS = 5;
 
 #define INOTIFY_EVENT_SIZE  ( sizeof (struct inotify_event) )
 #define INOTIFY_BUF_LEN     ( 1024 * ( INOTIFY_EVENT_SIZE + 16 ) )
 
 std::atomic<bool> should_quit{false};
 
-void stop(int i) {
+void stop(int) {
     should_quit.store(true);
 }
 
-LARGE_INTEGER convert_time(timeval t) { // convert timeval to windows file time
-    LARGE_INTEGER wft;
-    wft.QuadPart = ((static_cast<ULONGLONG>(t.tv_sec) + 11644473600) * 10000000) + (t.tv_usec * 10); // hopefully wine doesnt change how this is calculated
-    return wft;
+int64_t convert_time(timeval t) {
+    return ((static_cast<int64_t>(t.tv_sec) + 11644473600LL) * 10000000LL) + (t.tv_usec * 10);
 }
 
-USHORT convert_scan_code(USHORT code) {
+uint16_t convert_scan_code(uint16_t code) {
     static const std::array<uint16_t, 116 - 96> special_codes = []() {
         std::array<uint16_t, 116 - 96> map{};
         map[96 - 96] = 0xE01C;  // KPENTER
@@ -77,19 +86,6 @@ USHORT convert_scan_code(USHORT code) {
     }();
 
     return (code > 96) && (code < 116) ? special_codes[code - 96] : code;
-}
-
-DWORD WINAPI gd_watchdog(LPVOID) { // CreateProcess doesn't return a handle for linux-input.exe, so a job object to auto-close linux-input.exe isn't an option
-    HANDLE gdMutex = OpenMutex(SYNCHRONIZE, FALSE, "CBFWatchdogMutex");
-    if (gdMutex == NULL) {
-        std::cerr << "[CBF] Failed to open mutex: " << GetLastError() << std::endl;
-        should_quit.store(true);
-        return 1;
-    }
-    WaitForSingleObject(gdMutex, INFINITE);
-    ReleaseMutex(gdMutex);
-    should_quit.store(true);
-    return 0;
 }
 
 void add_input_device(std::string path, int epoll_fd, std::vector<struct libevdev*> &devices, std::vector<std::string> &devices_paths){
@@ -148,7 +144,6 @@ void remove_input_device(std::string path, std::vector<struct libevdev*> &device
     std::cerr << "[CBF] Removed device: " << path << std::endl;
 }
 
-// ensure an axis is consistent among all controllers
 int32_t normalize_axis(struct libevdev* dev, int code, int val, int min, int max) {
     int abs_min = libevdev_get_abs_minimum(dev, code);
     int abs_max = libevdev_get_abs_maximum(dev, code);
@@ -157,8 +152,30 @@ int32_t normalize_axis(struct libevdev* dev, int code, int val, int min, int max
     return scaled;
 }
 
-int main() {
-    std::cerr << "[CBF] Linux input program started" << std::endl;
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "[CBF] Usage: linux-input <shm_path>" << std::endl;
+        return 1;
+    }
+
+    std::string shm_path = argv[1];
+    std::cerr << "[CBF] Linux input program started, shm: " << shm_path << std::endl;
+
+    int shm_fd = open(shm_path.c_str(), O_RDWR);
+    if (shm_fd == -1) {
+        std::cerr << "[CBF] Failed to open shared memory: " << strerror(errno) << std::endl;
+        return 1;
+    }
+
+    SharedMemory* shm = static_cast<SharedMemory*>(
+        mmap(NULL, sizeof(SharedMemory), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0));
+    close(shm_fd);
+
+    if (shm == MAP_FAILED) {
+        std::cerr << "[CBF] Failed to mmap shared memory: " << strerror(errno) << std::endl;
+        return 1;
+    }
+
     std::vector<struct libevdev*> devices;
     // To my knowledge, there is not a proper way to access a device's path using libevdev, so we need to store
     // their paths in a separate vector.
@@ -169,18 +186,21 @@ int main() {
     int epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
         std::cerr << "[CBF] Failed to create epoll instance: " << strerror(errno) << std::endl;
+        munmap(shm, sizeof(SharedMemory));
         return 1;
     }
 
     int inotify_fd = inotify_init1(IN_NONBLOCK);
     if (inotify_fd < 0){
         std::cerr << "[CBF] Failed to create inotify instance: " << strerror(errno) << std::endl;
+        munmap(shm, sizeof(SharedMemory));
         return 1;
     }
 
     int inotify_watch = inotify_add_watch(inotify_fd, input_dir, IN_DELETE | IN_ATTRIB);
     if(inotify_watch < 0){
         std::cerr << "[CBF] Failed to create an inotify watch: " << strerror(errno) << std::endl;
+        munmap(shm, sizeof(SharedMemory));
         return 1;
     }
     char inotify_buffer[INOTIFY_BUF_LEN];
@@ -199,53 +219,45 @@ int main() {
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
 
-    HANDLE hSharedMem = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, "LinuxSharedMemory");
-    if (hSharedMem == NULL) {
-        std::cerr << "[CBF] Failed to open file mapping: " << GetLastError() << std::endl;
-        return 1;
-    }
-
-    LPVOID pBuf = MapViewOfFile(hSharedMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(LinuxInputEvent) * BUFFER_SIZE);
-    if (pBuf == NULL) {
-        std::cerr << "[CBF] Failed to map view of file: " << GetLastError() << std::endl;
-        CloseHandle(hSharedMem);
-        return 1;
-    }
-
-    LinuxInputEvent* shared_events = static_cast<LinuxInputEvent*>(pBuf);
-
-    HANDLE hMutex = OpenMutex(SYNCHRONIZE, FALSE, "CBFLinuxMutex");
-    if (hMutex == NULL) {
-        std::cerr << "[CBF] Failed to open mutex: " << GetLastError() << std::endl;
-        UnmapViewOfFile(pBuf);
-        CloseHandle(hSharedMem);
-        return 1;
-    }
-
     if (devices.empty()) {
         std::cerr << "[CBF] No input devices" << std::endl;
+        shm->error_flag = 3;
         close(epoll_fd);
-
-        DWORD waitResult = WaitForSingleObject(hMutex, 1000);
-        if (waitResult == WAIT_OBJECT_0) {
-            shared_events[0].type = 3; // cant access input devices
-            ReleaseMutex(hMutex);
-        }
-        else if (waitResult != WAIT_TIMEOUT) {
-            std::cerr << "[CBF] Failed to acquire mutex: " << GetLastError() << std::endl;
-        }
-
+        inotify_rm_watch(inotify_fd, inotify_watch);
+        close(inotify_fd);
+        munmap(shm, sizeof(SharedMemory));
         return 1;
     }
 
     std::cerr << "[CBF] Waiting for input events" << std::endl;
-    CreateThread(NULL, 0, gd_watchdog, NULL, 0, NULL);
+
+    uint32_t last_heartbeat = shm->heartbeat;
+    bool heartbeat_started = false;
+    struct timespec last_heartbeat_time;
+    clock_gettime(CLOCK_MONOTONIC, &last_heartbeat_time);
 
     epoll_event events[MAX_EVENTS];
 
     while (!should_quit.load()) {
 
-        // Reads if there's an inotify event ready
+        // Watchdog: exit if GD stops updating the heartbeat.
+        // Don't start counting until GD has incremented the heartbeat at least once,
+        // since GD may take a long time to finish loading.
+        uint32_t current_heartbeat = shm->heartbeat;
+        if (current_heartbeat != last_heartbeat) {
+            last_heartbeat = current_heartbeat;
+            clock_gettime(CLOCK_MONOTONIC, &last_heartbeat_time);
+            heartbeat_started = true;
+        } else if (heartbeat_started) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            long elapsed_secs = now.tv_sec - last_heartbeat_time.tv_sec;
+            if (elapsed_secs >= WATCHDOG_TIMEOUT_SECS) {
+                std::cerr << "[CBF] GD heartbeat timeout, exiting" << std::endl;
+                break;
+            }
+        }
+
         int inotify_len = read(inotify_fd, inotify_buffer, INOTIFY_BUF_LEN);
         if(inotify_len > 0){
             int i = 0;
@@ -256,7 +268,6 @@ int main() {
                 if(event->len) {
                     i+= INOTIFY_EVENT_SIZE + event->len;
 
-                    // Saves the current device path and name in a string and skips the loop if it's is not a keyboard
                     std::string device_name = std::string(event->name);
                     std::string path = std::string(input_dir) + device_name;
                     if(device_name.find("event") != 0) continue;
@@ -279,7 +290,7 @@ int main() {
 
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, 100);
         if (nfds == -1) {
-            if (errno == EINTR) continue; // timeout
+            if (errno == EINTR) continue;
             std::cerr << "[CBF] Failed to epoll_wait: " << strerror(errno) << std::endl;
             break;
         }
@@ -291,20 +302,18 @@ int main() {
             while (libevdev_has_event_pending(dev)) {
                 int rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
                 if (rc != -EAGAIN && rc != 0) {
-                    // Seems like even after removing the device, if there is a libevdev event pending
-                    // it will still try to access it, but that is not possible anymore.
                     if (rc == -ENODEV) break;
 
                     std::cerr << "[CBF] Error reading event: " << strerror(-rc) << std::endl;
                     break;
                 }
-                
-                LARGE_INTEGER time = convert_time(ev.time);
-                USHORT code = ev.code;
-                int value = ev.value;
+
+                int64_t time = convert_time(ev.time);
+                uint16_t code = ev.code;
+                int32_t value = ev.value;
                 DeviceType device_type;
 
-                if (ev.type != EV_ABS && (ev.type != EV_KEY || ev.value == 2)) { // Exclude autorepeat
+                if (ev.type != EV_ABS && (ev.type != EV_KEY || ev.value == 2)) {
                     continue;
                 }
 
@@ -324,31 +333,26 @@ int main() {
                 else if (libevdev_has_event_code(dev, EV_KEY, BTN_GAMEPAD)) {
                     device_type = CONTROLLER;
                     if (ev.type == EV_ABS) {
-                        if (ev.code == ABS_Z || ev.code == ABS_RZ) value = normalize_axis(dev, code, value, 0, 255); // different range for lt and rt
+                        if (ev.code == ABS_Z || ev.code == ABS_RZ) value = normalize_axis(dev, code, value, 0, 255);
                         else value = normalize_axis(dev, code, value, -32768, 32767);
-                    } 
+                    }
                 }
                 else {
                     device_type = UNKNOWN;
                 }
 
-                DWORD waitResult = WaitForSingleObject(hMutex, 1000);
-                if (waitResult == WAIT_OBJECT_0) {
-                    for (int i = 0; i < BUFFER_SIZE; i++) {
-                        if (shared_events[i].type == 0) { // if there is room in the buffer
-                            shared_events[i].time = time;
-                            shared_events[i].type = ev.type;
-                            shared_events[i].code = code;
-                            shared_events[i].value = value;
-                            shared_events[i].deviceType = device_type;
-                            break;
-                        }
-                    }
-                    ReleaseMutex(hMutex);
-                }
-                else if (waitResult != WAIT_TIMEOUT) {
-                    std::cerr << "[CBF] Failed to acquire mutex: " << GetLastError() << std::endl;
-                }
+                uint32_t h = shm->head;
+                uint32_t t = shm->tail;
+                if (h - t >= RING_BUFFER_SIZE) continue; // buffer full, drop event
+
+                LinuxInputEvent& slot = shm->events[h & (RING_BUFFER_SIZE - 1)];
+                slot.time = time;
+                slot.type = ev.type;
+                slot.code = code;
+                slot.value = value;
+                slot.deviceType = device_type;
+                std::atomic_thread_fence(std::memory_order_release);
+                shm->head = h + 1;
             }
         }
     }
@@ -363,12 +367,9 @@ int main() {
     close(epoll_fd);
     inotify_rm_watch(inotify_fd, inotify_watch);
     close(inotify_fd);
-
-    UnmapViewOfFile(pBuf);
-    CloseHandle(hSharedMem);
-    CloseHandle(hMutex);
+    munmap(shm, sizeof(SharedMemory));
+    unlink(shm_path.c_str());
 
     std::cerr << "[CBF] Linux input program exiting" << std::endl;
     return 0;
 }
-
