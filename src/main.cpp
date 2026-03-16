@@ -66,7 +66,7 @@ void buildStepQueue(int stepCount) {
 		return;
 	}
 
-	if (!linuxNative) inputVector = playLayer->m_queuedButtons;
+	if (!linuxNative) inputVector.insert(inputVector.end(), playLayer->m_queuedButtons.begin(), playLayer->m_queuedButtons.end());
 	playLayer->m_queuedButtons.clear();
 
 	TimestampType deltaTime = currentFrameTime - lastFrameTime;
@@ -77,7 +77,7 @@ void buildStepQueue(int stepCount) {
 		double elapsedTime = 0.0;
 		while (inputIdx < inputVector.size()) { // while loop to account for multiple inputs on the same step
 			PlayerButtonCommand input = inputVector[inputIdx];
-			if (input.m_timestamp - lastFrameTime < stepDelta * (i + 1) || i + 1 == stepCount) { // if the next input in the vector happened on the current step, or if its the last step
+			if (input.m_timestamp - lastFrameTime < stepDelta * (i + 1)) { // if the next input in the vector happened on the current step, or if its the last step
 				double inputTime = fmod((input.m_timestamp - lastFrameTime), stepDelta) / stepDelta; // proportion of step elapsed at the time the input was made
 				stepQueue.emplace_back(Step{ input, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
 				elapsedTime = inputTime;
@@ -91,7 +91,7 @@ void buildStepQueue(int stepCount) {
 	}
 
 	lastFrameTime = currentFrameTime;
-	inputVector.clear();
+	inputVector.erase(inputVector.begin(), inputVector.begin() + inputIdx); // keep inputs with timestamps later than currentFrameTime
 }
 
 /*
