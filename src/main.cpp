@@ -221,8 +221,10 @@ class $modify(PlayLayer) {
 		if (linuxNative) updateKeybinds(); // update keybinds when you enter a level (for linux)
 		#endif
 		bool result = PlayLayer::init(level, useReplay, dontCreateObjects);
-		this->m_clickBetweenSteps = false;
-		this->m_clickOnSteps = false;
+		if (!softToggle) {
+			this->m_clickBetweenSteps = false;
+			this->m_clickOnSteps = false;
+		}
 		return result;
 	}
 
@@ -577,6 +579,19 @@ void toggleMod(bool disable) {
 #endif
 
 	softToggle = disable;
+
+	PlayLayer* pl = PlayLayer::get();
+	if (pl) {
+		if (!softToggle) {
+			pl->m_clickBetweenSteps = false;
+			pl->m_clickOnSteps = false;
+		}
+		else {
+			GameManager* gm = GameManager::get();
+			pl->m_clickBetweenSteps = gm->getGameVariable("0177");
+			pl->m_clickOnSteps = gm->getGameVariable("0176");
+		}
+	}
 }
 
 $on_mod(Loaded) {
