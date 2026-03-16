@@ -1,6 +1,8 @@
+#include "Geode/loader/Log.hpp"
 #include "includes.hpp"
 
 #include <limits>
+#include <math.h>
 
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
@@ -11,11 +13,11 @@
 
 constexpr double SMALLEST_FLOAT = std::numeric_limits<float>::min();
 
-constexpr InputEvent EMPTY_INPUT = InputEvent {
-	.time = 0,
-	.inputType = PlayerButton::Jump,
-	.inputState = false,
-	.isPlayer1 = false,
+constexpr PlayerButtonCommand EMPTY_INPUT = PlayerButtonCommand {
+	.m_button = PlayerButton::Jump,
+	.m_isPush = false,
+	.m_isPlayer2 = false,
+	.m_timestamp = 0
 };
 constexpr Step EMPTY_STEP = Step {
 	.input = EMPTY_INPUT,
@@ -23,34 +25,26 @@ constexpr Step EMPTY_STEP = Step {
 	.endStep = true,
 };
 
-std::deque<struct InputEvent> inputQueue;
-std::deque<struct InputEvent> inputQueueCopy;
+std::vector<struct PlayerButtonCommand> inputVector;
 std::deque<struct Step> stepQueue;
 
-std::atomic<bool> softToggle;
+bool softToggle;
+bool enableRightClick;
 
-InputEvent nextInput = EMPTY_INPUT;
+PlayerButtonCommand nextInput = EMPTY_INPUT;
 
 TimestampType lastFrameTime;
 TimestampType currentFrameTime;
 
 bool firstFrame = true; // necessary to prevent accidental inputs at the start of the level or when unpausing
 bool skipUpdate = true; // true -> dont split steps during PlayerObject::update()
-bool enableInput = false;
 bool linuxNative = false;
-bool lateCutoff; // false -> ignore inputs that happen after the start of the frame; true -> check for inputs at the latest possible moment
 
 std::array<std::unordered_set<size_t>, 6> inputBinds;
 std::unordered_set<uint16_t> heldInputs;
 
-std::mutex inputQueueLock;
-std::mutex keybindsLock;
-
-std::atomic<bool> enableRightClick;
-bool threadPriority;
-
 /*
-this function copies over the inputQueue from the input thread and uses it to build a queue of physics steps
+this function copies over the input data and uses it to build a queue of physics steps
 based on when each input happened relative to the start of the frame
 (and also calculates the associated stepDelta multipliers for each step)
 */
@@ -59,60 +53,45 @@ void buildStepQueue(int stepCount) {
 	nextInput = EMPTY_INPUT;
 	stepQueue = {}; // shouldnt be necessary, but just in case
 
-	if (lateCutoff) { // copy all inputs in queue, use current time as the frame boundary
-		currentFrameTime = getCurrentTimestamp();
-		#ifdef GEODE_IS_WINDOWS
-		if (linuxNative) {
-			linuxCheckInputs();
-		}
-		#endif
-
-		std::lock_guard lock(inputQueueLock);
-		inputQueueCopy = inputQueue;
-		inputQueue = {};
-	}
-	else { // only copy inputs that happened before the start of the frame
-		#ifdef GEODE_IS_WINDOWS
-		if (linuxNative) linuxCheckInputs();
-		#endif
-
-		std::lock_guard lock(inputQueueLock);
-		while (!inputQueue.empty() && inputQueue.front().time <= currentFrameTime) {
-			inputQueueCopy.push_back(inputQueue.front());
-			inputQueue.pop_front();
-		}
-	}
+	#ifdef GEODE_IS_WINDOWS
+	if (linuxNative) linuxCheckInputs();
+	#endif
 
 	skipUpdate = false;
 	if (firstFrame) {
 		skipUpdate = true;
 		firstFrame = false;
 		lastFrameTime = currentFrameTime;
-		if (!lateCutoff) inputQueueCopy = {};
+		inputVector.clear();
 		return;
 	}
 
-	TimestampType deltaTime = currentFrameTime - lastFrameTime;
-	TimestampType stepDelta = (deltaTime / stepCount) + 1; // the +1 is to prevent dropped inputs caused by integer division
+	if (!linuxNative) inputVector = playLayer->m_queuedButtons;
+	playLayer->m_queuedButtons.clear();
 
+	TimestampType deltaTime = currentFrameTime - lastFrameTime;
+	TimestampType stepDelta = deltaTime / stepCount;
+
+	int inputIdx = 0;
 	for (int i = 0; i < stepCount; i++) { // for each physics step of the frame
 		double elapsedTime = 0.0;
-		while (!inputQueueCopy.empty()) { // while loop to account for multiple inputs on the same step
-			InputEvent front = inputQueueCopy.front();
-
-			if (front.time - lastFrameTime < stepDelta * (i + 1)) { // if the first input in the queue happened on the current step
-				double inputTime = static_cast<double>((front.time - lastFrameTime) % stepDelta) / stepDelta; // proportion of step elapsed at the time the input was made
-				stepQueue.emplace_back(Step{ front, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
-				inputQueueCopy.pop_front();
+		while (inputIdx < inputVector.size()) { // while loop to account for multiple inputs on the same step
+			PlayerButtonCommand input = inputVector[inputIdx];
+			if (input.m_timestamp - lastFrameTime < stepDelta * (i + 1) || i + 1 == stepCount) { // if the next input in the vector happened on the current step, or if its the last step
+				double inputTime = fmod((input.m_timestamp - lastFrameTime), stepDelta) / stepDelta; // proportion of step elapsed at the time the input was made
+				stepQueue.emplace_back(Step{ input, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
 				elapsedTime = inputTime;
+				inputIdx++;
+				//log::info("i{} l{} c{} {}", input.m_timestamp, lastFrameTime, currentFrameTime, input.m_timestamp < lastFrameTime || input.m_timestamp > currentFrameTime);
 			}
-			else break; // no more inputs this step, more later in the frame
+			else break; 
 		}
 
-		stepQueue.emplace_back(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - elapsedTime), true });
+		if (elapsedTime < 1.0) stepQueue.emplace_back(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - elapsedTime), true });
 	}
 
 	lastFrameTime = currentFrameTime;
+	inputVector.clear();
 }
 
 /*
@@ -126,12 +105,9 @@ Step popStepQueue() {
 	Step front = stepQueue.front();
 	double deltaFactor = front.deltaFactor;
 
-	if (nextInput.time != 0) {
+	if (nextInput.m_timestamp != 0) {
 		PlayLayer* playLayer = PlayLayer::get();
-
-		enableInput = true;
-		playLayer->handleButton(nextInput.inputState, (int)nextInput.inputType, nextInput.isPlayer1);
-		enableInput = false;
+		playLayer->handleButton(nextInput.m_isPush, (int)nextInput.m_button, !nextInput.m_isPlayer2);
 	}
 
 	nextInput = front.input;
@@ -141,38 +117,35 @@ Step popStepQueue() {
 }
 
 #ifdef GEODE_IS_WINDOWS
-#include <geode.custom-keybinds/include/Keybinds.hpp>
 /*
-send list of keybinds to the input thread
+prepare list of keybinds for linux
 */
 void updateKeybinds() {
 	std::array<std::unordered_set<size_t>, 6> binds;
-	std::vector<geode::Ref<keybinds::Bind>> v;
+	std::vector<geode::Keybind> v;
+	Mod* customKeybinds = Loader::get()->getInstalledMod("geode.custom-keybinds");
 
-	enableRightClick.store(Mod::get()->getSettingValue<bool>("right-click"));
+	enableRightClick = Mod::get()->getSettingValue<bool>("right-click");
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("jump-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Jump].emplace(v[i].key);
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-left-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Left].emplace(v[i].key);
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p1");
-	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-right-p1");
+	for (int i = 0; i < v.size(); i++) binds[p1Right].emplace(v[i].key);
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/jump-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("jump-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Jump].emplace(v[i].key);
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-left-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-left-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Left].emplace(v[i].key);
 
-	v = keybinds::BindManager::get()->getBindsFor("robtop.geometry-dash/move-right-p2");
-	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i]->getHash());
+	v = customKeybinds->getSettingValue<std::vector<geode::Keybind>>("move-right-p2");
+	for (int i = 0; i < v.size(); i++) binds[p2Right].emplace(v[i].key);
 
-	{
-		std::lock_guard lock(keybindsLock);
-		inputBinds = binds;
-	}
+	inputBinds = binds;
 }
 #endif
 
@@ -199,7 +172,7 @@ bool legacyBypass;
 determine the number of physics steps that happen on each frame,
 need to rewrite the vanilla formula bc otherwise you'd have to use inline assembly to get the step count
 */
-int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
+int calculateStepCount(double delta, float timewarp, bool forceVanilla) {
 	if (!physicsBypass || forceVanilla) { // vanilla 2.2
 		return std::round(std::max(1.0, ((delta * 60.0) / std::min(1.0f, timewarp)) * 4.0)); // not sure if this is different from `(delta * 240) / timewarp` bc of float precision
 	}
@@ -229,18 +202,20 @@ int calculateStepCount(float delta, float timewarp, bool forceVanilla) {
 bool safeMode;
 
 class $modify(PlayLayer) {
-#ifdef GEODE_IS_WINDOWS
-	// update keybinds when you enter a level
 	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-		updateKeybinds();
-		return PlayLayer::init(level, useReplay, dontCreateObjects);
+		#ifdef GEODE_IS_WINDOWS
+		updateKeybinds(); // update keybinds when you enter a level (for linux)
+		#endif
+		bool result = PlayLayer::init(level, useReplay, dontCreateObjects);
+		this->m_clickBetweenSteps = false;
+		this->m_clickOnSteps = false;
+		return result;
 	}
-#endif
 
 	// disable progress in safe mode
 	void levelComplete() {
 		bool testMode = this->m_isTestMode;
-		if (safeMode && !softToggle.load()) this->m_isTestMode = true;
+		if (safeMode && !softToggle) this->m_isTestMode = true;
 
 		PlayLayer::levelComplete();
 
@@ -249,7 +224,7 @@ class $modify(PlayLayer) {
 
 	// disable new best popup in safe mode
 	void showNewBest(bool p0, int p1, int p2, bool p3, bool p4, bool p5) {
-		if (!safeMode || softToggle.load()) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
+		if (!safeMode || softToggle) PlayLayer::showNewBest(p0, p1, p2, p3, p4, p5);
 	}
 };
 
@@ -259,11 +234,7 @@ void onFrameStart() {
 	PlayLayer* playLayer = PlayLayer::get();
 	CCNode* par;
 
-	if (!lateCutoff) {
-		currentFrameTime = getCurrentTimestamp();
-	}
-
-	if (softToggle.load() // CBF disabled
+	if (softToggle // CBF disabled
 	#ifdef GEODE_IS_WINDOWS
 		|| !GetFocus() // GD is minimized
 	#endif
@@ -274,14 +245,7 @@ void onFrameStart() {
 	{
 		firstFrame = true;
 		skipUpdate = true;
-		enableInput = true;
-
-		inputQueueCopy = {};
-
-		if (!linuxNative) { // clearing the queue isnt necessary on Linux since its fixed size anyway, but on Windows memory leaks are possible
-			std::lock_guard lock(inputQueueLock);
-			inputQueue = {};
-		}
+		inputVector = {};
 	}
 	#ifdef GEODE_IS_WINDOWS
 	if (mouseFix && !skipUpdate) { // reduce lag with high polling rate mice by limiting the number of mouse movements per frame to 1
@@ -302,20 +266,22 @@ void onFrameStart() {
 class $modify(CCEGLView) {
 	void pollEvents() {
 		onFrameStart();
-
 		CCEGLView::pollEvents();
 	}
 };
-#else
+#endif
+
 #include <Geode/modify/CCScheduler.hpp>
 class $modify(CCScheduler) {
 	void update(float dt) {
+		#ifndef GEODE_IS_WINDOWS
 		onFrameStart();
+		#endif
 
+		currentFrameTime = getCurrentTimestamp(); // need to do this after pumprawinput runs even on windows
 		CCScheduler::update(dt);
 	}
 };
-#endif
 
 int stepCount;
 bool clickOnSteps = false;
@@ -326,22 +292,16 @@ class $modify(GJBaseGameLayer) {
 		(void) self.setHookPriority("GJBaseGameLayer::getModifiedDelta", Priority::VeryEarly);
 	}
 
-	// disable regular inputs while CBF is active
-	void handleButton(bool down, int button, bool isPlayer1) {
-		if (enableInput) GJBaseGameLayer::handleButton(down, button, isPlayer1);
-	}
-
 	// either use the modified delta to calculate the step count, or use the actual delta if physics bypass is enabled
-	float calculateSteps(float modifiedDelta) {
+	double calculateSteps(float modifiedDelta) {
 		PlayLayer* pl = PlayLayer::get();
 		if (pl) {
 			const float timewarp = pl->m_gameState.m_timeWarp;
-			if (physicsBypass && (!firstFrame || softToggle.load())) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
+			if (physicsBypass && (!firstFrame || softToggle)) modifiedDelta = CCDirector::sharedDirector()->getActualDeltaTime() * timewarp;
 
 			stepCount = calculateStepCount(modifiedDelta, timewarp, false);
 
-			if (pl->m_playerDied || GameManager::sharedState()->getEditorLayer() || softToggle.load()) {
-				enableInput = true;
+			if (pl->m_playerDied || GameManager::sharedState()->getEditorLayer() || softToggle) {
 				skipUpdate = true;
 				firstFrame = true;
 			}
@@ -353,15 +313,15 @@ class $modify(GJBaseGameLayer) {
 		return modifiedDelta;
 	}
 
-	void processCommands(float p0) {
+	void processCommands(float p0, bool p1, bool p2) {
 		if (clickOnSteps && !stepQueue.empty()) {
 			Step step;
 			do step = popStepQueue(); while (!stepQueue.empty() && !step.endStep); // process 1 step (or more if theres an input)
 		}
-		GJBaseGameLayer::processCommands(p0);
+		GJBaseGameLayer::processCommands(p0, p1 ,p2);
 	}
 
-	float getModifiedDelta(float delta) {
+	double getModifiedDelta(float delta) {
 		return calculateSteps(GJBaseGameLayer::getModifiedDelta(delta));
 	}
 
@@ -392,7 +352,6 @@ class $modify(PlayerObject) {
 	// split a single step based on the entries in stepQueue
 	void update(float stepDelta) {
 		PlayLayer* pl = PlayLayer::get();
-		if (!skipUpdate) enableInput = false;
 		
 		if (pl && this != pl->m_player1 || midStep) { // do all of the logic during the P1 update for simplicity
 			if (midStep || !inputThisStep || this != pl->m_player2) PlayerObject::update(stepDelta);
@@ -514,12 +473,12 @@ class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
 
-		if (!softToggle.load() || physicsBypass) {
+		if (!softToggle || physicsBypass) {
 			std::string text;
 
-			if ((softToggle.load() || clickOnSteps) && physicsBypass) text = "PB";
+			if ((softToggle || clickOnSteps) && physicsBypass) text = "PB";
 			else if (physicsBypass) text = "CBF+PB";
-			else if (!clickOnSteps && !softToggle.load()) text = "CBF";
+			else if (!clickOnSteps && !softToggle) text = "CBF";
 			else return;
 
 			cocos2d::CCSize size = cocos2d::CCDirector::sharedDirector()->getWinSize();
@@ -541,17 +500,17 @@ dont submit to leaderboards for rated levels
 class $modify(GJGameLevel) {
 	void savePercentage(int percent, bool p1, int clicks, int attempts, bool valid) {
 		valid = (
-			softToggle.load() && !physicsBypass	
+			softToggle && !physicsBypass	
 			|| clickOnSteps && !physicsBypass
 			|| this->m_stars == 0
 		);
 
-		if (!safeMode || softToggle.load()) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
+		if (!safeMode || softToggle) GJGameLevel::savePercentage(percent, p1, clicks, attempts, valid);
 	}
 };
 
 float Slerp2D(float p0, float p1, float p2) {
-	auto orig = reinterpret_cast<float (*)(float, float, float)>(geode::base::get() + 0x71ec0);
+	auto orig = reinterpret_cast<float (*)(float, float, float)>(geode::base::get() + 0x71ef0);
 	if (shipRotDelta != 0.0f) { // only do anything if Slerp2D is called within PlayerObject::updateShipRotation()
 		shipRotDelta *= p2 * 1024; // p2 is 1/1024 scaled by a constant factor, we need to multiply shipRotDelta by that factor
 		return orig(p0, p1, shipRotDelta);
@@ -561,7 +520,7 @@ float Slerp2D(float p0, float p1, float p2) {
 
 void togglePhysicsBypass(bool enable) {
 #ifdef GEODE_IS_WINDOWS
-	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x2322ca);
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x237a91);
 
 	static Patch* pbPatch = nullptr;
 	if (!pbPatch) {
@@ -586,8 +545,8 @@ void togglePhysicsBypass(bool enable) {
 }
 
 void toggleMod(bool disable) {
-#if defined(GEODE_IS_WINDOWS) || defined(GEODE_IS_ANDROID64)
-	void* addr = reinterpret_cast<void*>(geode::base::get() + GEODE_WINDOWS(0x607230) GEODE_ANDROID64(0x5c00d0));
+#if defined(GEODE_IS_WINDOWS)
+	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x622bd0);
 
 	static Patch* modPatch = nullptr;
 	if (!modPatch) modPatch = Mod::get()->patch(addr, { 0x29, 0x5c, 0x4f, 0x3f }).unwrap();
@@ -599,48 +558,41 @@ void toggleMod(bool disable) {
 	}
 #endif
 
-	softToggle.store(disable);
+	softToggle = disable;
 }
 
 $on_mod(Loaded) {
 	Mod::get()->setSavedValue<bool>("is-linux", false);
 
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
-	listenForSettingChanges("soft-toggle", toggleMod);
+	listenForSettingChanges<bool>("soft-toggle", toggleMod);
 
 	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
-	listenForSettingChanges("physics-bypass", togglePhysicsBypass);
+	listenForSettingChanges<bool>("physics-bypass", togglePhysicsBypass);
 
 	legacyBypass = Mod::get()->getSettingValue<std::string>("bypass-mode") == "2.1";
-	listenForSettingChanges("bypass-mode", +[](std::string mode) {
+	listenForSettingChanges<std::string>("bypass-mode", +[](std::string mode) {
 		legacyBypass = mode == "2.1";
 	});
 
 	safeMode = Mod::get()->getSettingValue<bool>("safe-mode");
-	listenForSettingChanges("safe-mode", +[](bool enable) {
+	listenForSettingChanges<bool>("safe-mode", +[](bool enable) {
 		safeMode = enable;
 	});
 
 	clickOnSteps = Mod::get()->getSettingValue<bool>("click-on-steps");
-	listenForSettingChanges("click-on-steps", +[](bool enable) {
+	listenForSettingChanges<bool>("click-on-steps", +[](bool enable) {
 		clickOnSteps = enable;
 	});
 
 	mouseFix = Mod::get()->getSettingValue<bool>("mouse-fix");
-	listenForSettingChanges("mouse-fix", +[](bool enable) {
+	listenForSettingChanges<bool>("mouse-fix", +[](bool enable) {
 		mouseFix = enable;
 	});
 
-	lateCutoff = Mod::get()->getSettingValue<bool>("late-cutoff");
-	listenForSettingChanges("late-cutoff", +[](bool enable) {
-		lateCutoff = enable;
-	});
-
-	threadPriority = Mod::get()->getSettingValue<bool>("thread-priority");
-
 #ifdef GEODE_IS_WINDOWS
 	(void) Mod::get()->hook(
-		reinterpret_cast<void*>(geode::base::get() + 0x71ec0),
+		reinterpret_cast<void*>(geode::base::get() + 0x71ef0),
 		Slerp2D,
 		"Slerp2D",
 		tulip::hook::TulipConvention::Default

@@ -1,28 +1,18 @@
 {
-	"geode": "4.7.0",
+	"geode": "5.3.0",
 	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
 	},
-	"version": "v1.4.6",
+	"version": "v1.5.0",
 	"id": "syzzi.click_between_frames",
 	"name": "Click Between Frames",
 	"developer": "syzzi",
 	"description": "Allows inputs to register between frames.",
-	"dependencies": {
-		"geode.custom-keybinds": {
-			"importance": "required",
-			"version": ">=v1.10.0",
-			"platforms": ["win"]
-		}
-	},
 	"incompatibilities": {
-		"zmx.cbf-lite": {
-			"importance": "breaking",
-			"version": ">=1.0.0"
-		}
+		"zmx.cbf-lite": ">=1.0.0"
 	},
 	"tags": [
 		"performance",
@@ -52,38 +42,11 @@
 			"type": "bool",
 			"default": false
 		},
-		"right-click": {
-			"name": "Right Click P2",
-			"description": "Use right click for player 2 jump.",
-			"type": "bool",
-			"default": false,
-			"platforms": ["win"]
-		},
-		"performance-category": {
-			"name": "Performance",
-			"type": "title",
-			"platforms": ["win"]
-		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
 			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
 			"default": false,
-			"platforms": ["win"]
-		},
-		"late-cutoff": {
-			"name": "Late Input Cutoff",
-			"description": "Check for inputs near the end of the frame instead of the start.\n\nSlightly reduces input lag, but also slightly hurts precision. May help if you are experiencing dropped or delayed inputs.",
-			"type": "bool",
-			"default": false,
-			"platforms": ["win"]
-		},
-		"thread-priority": {
-			"name": "Thread Priority",
-			"description": "Whether to automatically set CBF's thread priority to the highest available.",
-			"type": "bool",
-			"default": true,
-			"requires-restart": true,
 			"platforms": ["win"]
 		},
 		"pb-category": {
@@ -117,6 +80,14 @@
 			"type": "bool",
 			"default": true,
 			"requires-restart": true,
+			"enable-if": "saved:you-must-be-on-linux-to-change-this",
+			"platforms": ["win"]
+		},
+		"right-click": {
+			"name": "Right Click P2",
+			"description": "Use right click for player 2 jump.",
+			"type": "bool",
+			"default": false,
 			"enable-if": "saved:you-must-be-on-linux-to-change-this",
 			"platforms": ["win"]
 		}

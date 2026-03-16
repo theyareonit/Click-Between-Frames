@@ -304,29 +304,21 @@ int main() {
                 int value = ev.value;
                 DeviceType device_type;
 
-                if (libevdev_has_event_type(dev, EV_REL)) {
-                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
+                if (ev.type != EV_ABS && (ev.type != EV_KEY || ev.value == 2)) { // Exclude autorepeat
+                    continue;
+                }
+
+                if (ev.code == BTN_LEFT || ev.code == BTN_RIGHT) {
                     device_type = MOUSE;
                 }
                 else if (libevdev_has_event_code(dev, EV_KEY, KEY_1)) {
-                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
                     device_type = KEYBOARD;
                     code = convert_scan_code(ev.code);
                 }
                 else if (libevdev_has_property(dev, INPUT_PROP_DIRECT)) {
-                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
                     device_type = TOUCHSCREEN;
                 }
                 else if (libevdev_has_property(dev, INPUT_PROP_BUTTONPAD)) {
-                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
                     device_type = TOUCHPAD;
                 }
                 else if (libevdev_has_event_code(dev, EV_KEY, BTN_GAMEPAD)) {
@@ -335,14 +327,8 @@ int main() {
                         if (ev.code == ABS_Z || ev.code == ABS_RZ) value = normalize_axis(dev, code, value, 0, 255); // different range for lt and rt
                         else value = normalize_axis(dev, code, value, -32768, 32767);
                     } 
-                    else if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
                 }
                 else {
-                    if (ev.type != EV_KEY || ev.value == 2) { // Exclude autorepeat
-                        continue;
-                    }
                     device_type = UNKNOWN;
                 }
 
