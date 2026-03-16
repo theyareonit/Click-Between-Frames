@@ -87,7 +87,7 @@ void buildStepQueue(int stepCount) {
 			else break; 
 		}
 
-		if (elapsedTime < 1.0) stepQueue.emplace_back(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - elapsedTime), true });
+		stepQueue.emplace_back(Step{ EMPTY_INPUT, std::max(SMALLEST_FLOAT, 1.0 - elapsedTime), true });
 	}
 
 	lastFrameTime = currentFrameTime;
@@ -128,7 +128,7 @@ void updateKeybinds() {
 		static bool checked = 0;
 		if (!checked) log::info("Custom keybinds not loaded.");
 		checked = 1;
-		
+
 		inputBinds[p1Jump] = { KEY_Space, KEY_W, CONTROLLER_A, CONTROLLER_Up, CONTROLLER_RB };
 		inputBinds[p1Left] = { KEY_A, CONTROLLER_Left, CONTROLLER_LTHUMBSTICK_LEFT };
 		inputBinds[p1Right] = { KEY_D, CONTROLLER_Right, CONTROLLER_LTHUMBSTICK_RIGHT };
