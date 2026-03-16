@@ -246,10 +246,6 @@ class $modify(PlayLayer) {
 bool mouseFix;
 
 void onFrameStart() {
-	#ifdef GEODE_IS_WINDOWS
-	if (linuxNative) linuxHeartbeat();
-	#endif
-
 	PlayLayer* playLayer = PlayLayer::get();
 	CCNode* par;
 
@@ -266,7 +262,9 @@ void onFrameStart() {
 		skipUpdate = true;
 		inputVector.clear();
 	}
+	
 	#ifdef GEODE_IS_WINDOWS
+	if (linuxNative) linuxHeartbeat();
 	if (mouseFix && !skipUpdate) { // reduce lag with high polling rate mice by limiting the number of mouse movements per frame to 1
 		MSG msg;
 		int index = 1;

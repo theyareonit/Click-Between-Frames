@@ -27,7 +27,7 @@ inline TimestampType getCurrentTimestamp() {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	// time as seconds
-	return static_cast<TimestampType>(now.tv_sec) + (static_cast<TimestampType>(now.tv_nsec) / 1'000'000'000);
+	return (double)now.tv_sec + ((double)now.tv_nsec / 1'000'000'000.0);
 }
 
 #elif defined(GEODE_IS_MACOS) || defined(GEODE_IS_IOS)
@@ -36,7 +36,7 @@ inline TimestampType getCurrentTimestamp() {
 
 inline TimestampType getCurrentTimestamp() {
 	// convert ns to seconds
-	return static_cast<TimestampType>(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1'000'000'000;
+	return (double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1'000'000'000.0;
 }
 
 #endif
