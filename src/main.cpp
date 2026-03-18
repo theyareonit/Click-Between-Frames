@@ -244,6 +244,7 @@ class $modify(PlayLayer) {
 };
 
 bool mouseFix;
+bool precisionFix;
 
 void onFrameStart() {
 	PlayLayer* playLayer = PlayLayer::get();
@@ -293,9 +294,15 @@ class $modify(CCScheduler) {
 	void update(float dt) {
 		#ifndef GEODE_IS_WINDOWS
 		onFrameStart();
+		#else
+		if (precisionFix) {
+			static LARGE_INTEGER* cur = reinterpret_cast<LARGE_INTEGER*>(geode::base::getCocos() + 0x1a84d8);
+			currentFrameTime = (double)cur->QuadPart / (double)freq.QuadPart;
+		}
 		#endif
 
-		currentFrameTime = getCurrentTimestamp(); // need to do this after pumprawinput runs even on windows
+		if (!precisionFix) currentFrameTime = getCurrentTimestamp();
+		
 		CCScheduler::update(dt);
 	}
 };
@@ -538,17 +545,109 @@ float Slerp2D(float p0, float p1, float p2) {
 	else return orig(p0, p1, p2);
 }
 
+
+
+void writeAddr(geode::ByteVector& vec, size_t offset, const void* addr) {
+	memcpy(vec.data() + offset, &addr, sizeof(addr));
+}
+
+// ok some of the surrounding stuff was vibe coded but i did write all the asm myself
+void togglePrecisionFix(bool enable) {
+#ifdef GEODE_IS_WINDOWS
+	static Patch* pfPatch = nullptr;
+	static Patch* pfPatch2 = nullptr;
+
+	if (!pfPatch) {
+		uintptr_t base = geode::base::getCocos();
+		void* patchAddr = reinterpret_cast<void*>(base + 0x736f6);
+		void* patchAddr2 = reinterpret_cast<void*>(base + 0x73716);
+		void* retAddr = reinterpret_cast<void*>(base + 0x73703);
+		void* currentTimeAddr = reinterpret_cast<void*>(base + 0x1a84d8);
+
+		// prevent frame timing from desyncing over time in ccapplication::run
+		geode::ByteVector cave = {
+			0x9C,                                     // pushfq
+			0x0F, 0x57, 0xC0,                         // xorps xmm0, xmm0
+			0x0F, 0x57, 0xC9,                         // xorps xmm1, xmm1
+
+			// grid snap currentTime based on the float version of animation interval
+			0x48, 0x83, 0xC0, 0x0a,                   // add rax,10                               this fixes rounding errors, dont question it
+			0x0F, 0x5A, 0xC7,                         // cvtps2pd xmm0,xmm7
+			0x49, 0xB9, 0,0,0,0,0,0,0,0,              // movabs r9, &freq
+			0xF2, 0x49, 0x0F, 0x2A, 0x09,             // cvtsi2sd xmm1,qword ptr [r9]
+			0xF2, 0x0F, 0x59, 0xC1,                   // mulsd  xmm0,xmm1
+			0xF2, 0x48, 0x0F, 0x2A, 0xC8,             // cvtsi2sd xmm1,rax
+			0xF2, 0x0F, 0x5E, 0xC8,                   // divsd  xmm1,xmm0
+			0xF2, 0x48, 0x0F, 0x2C, 0xC1,             // cvttsd2si rax,xmm1
+			0xF2, 0x48, 0x0F, 0x2A, 0xC8,             // cvtsi2sd xmm1,rax
+			0xF2, 0x0F, 0x59, 0xC8,                   // mulsd  xmm1,xmm0
+			0xF2, 0x48, 0x0F, 0x2D, 0xC1,             // cvtsd2si rax,xmm1
+
+			// fix precision issue in deltaTime calculation (supplemented by pfPatch2)
+			0x4D, 0x8B, 0x21,                         // mov r12,QWORD PTR [r9]
+
+			// move corrected currentTime value into relevant locations
+			0x9D,                                     // popfq
+			0x48, 0x89, 0x44, 0x24, 0x58,             // mov [rsp+0x58], rax
+			0x48, 0xA3, 0,0,0,0,0,0,0,0,              // mov [currentTimeAddr], rax
+
+			// restore previous state
+			0x0F, 0x57, 0xC0,                         // xorps xmm0, xmm0
+			0x0F, 0x57, 0xC9,                         // xorps xmm1, xmm1
+			0xF2, 0x48, 0x0F, 0x2A, 0x44, 0x24, 0x68, // cvtsi2sd xmm0, [rsp+0x68]
+			0x49, 0xB9, 0,0,0,0,0,0,0,0,              // mov r9, retAddr
+			0x41, 0xFF, 0xE1                          // jmp r9
+		};
+
+		writeAddr(cave, 16, &freq);
+		writeAddr(cave, 72, currentTimeAddr);
+		writeAddr(cave, 95, retAddr);
+
+		void* caveAddr = VirtualAlloc(nullptr, cave.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		memcpy(caveAddr, cave.data(), cave.size());
+
+		geode::ByteVector entry = {
+			0x49, 0xB9, 0,0,0,0,0,0,0,0,              // mov r9, caveAddr
+			0x41, 0xFF, 0xE1                          // jmp r9
+		};
+		writeAddr(entry, 2, caveAddr);
+
+		log::info("Precision fix patch: {} at {}", entry, patchAddr);
+		pfPatch = Mod::get()->patch(patchAddr, entry).unwrap();
+
+		geode::ByteVector deltaPatch = {
+			0x90, 0x90, 0x90,
+			0xF2, 0x0F, 0x5E, 0xD1,
+			0x90, 0x90, 0x90, 0x90
+		};
+
+		log::info("Delta fix patch: {} at {}", deltaPatch, patchAddr2);
+		pfPatch2 = Mod::get()->patch(patchAddr2, deltaPatch).unwrap();
+	}
+
+	if (enable) {
+		(void) pfPatch->enable();
+		(void) pfPatch2->enable();
+	}
+	else {
+		(void) pfPatch->disable();
+		(void) pfPatch2->disable();
+	}
+
+	precisionFix = enable;
+#endif
+}
+
 void togglePhysicsBypass(bool enable) {
 #ifdef GEODE_IS_WINDOWS
 	void* addr = reinterpret_cast<void*>(geode::base::get() + 0x237a91);
 
 	static Patch* pbPatch = nullptr;
 	if (!pbPatch) {
-		geode::ByteVector bytes = { 0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 0x8b, 0x19 }; // could be 1 instruction if i was less lazy
-		int* stepAddr = &stepCount;
-		for (int i = 0; i < 8; i++) { // for each byte in stepAddr
-			bytes[i + 2] = ((char*)&stepAddr)[i]; // replace the zeroes with the address of stepCount
-		}
+		// mov rcx, &stepCount
+		// mov r11d, dword ptr [rcx]
+		geode::ByteVector bytes = { 0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 0x8b, 0x19 };
+		writeAddr(bytes, 2, &stepCount);
 		log::info("Physics bypass patch: {} at {}", bytes, addr);
 		pbPatch = Mod::get()->patch(addr, bytes).unwrap();
 	}
@@ -600,6 +699,9 @@ $on_mod(Loaded) {
 
 	toggleMod(Mod::get()->getSettingValue<bool>("soft-toggle"));
 	listenForSettingChanges<bool>("soft-toggle", toggleMod);
+
+	togglePrecisionFix(Mod::get()->getSettingValue<bool>("precision-fix"));
+	listenForSettingChanges<bool>("precision-fix", togglePrecisionFix);
 
 	togglePhysicsBypass(Mod::get()->getSettingValue<bool>("physics-bypass"));
 	listenForSettingChanges<bool>("physics-bypass", togglePhysicsBypass);

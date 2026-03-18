@@ -42,11 +42,23 @@
 			"type": "bool",
 			"default": false
 		},
+		"performance-category": {
+			"name": "Performance",
+			"type": "title",
+			"platforms": ["win"]
+		},
 		"mouse-fix": {
 			"name": "Reduce Mouse Lag",
 			"description": "Reduce lag when using high polling rate mice.\nExperimental, may break things.",
 			"type": "bool",
 			"default": false,
+			"platforms": ["win"]
+		},
+		"precision-fix": {
+			"name": "Precision Fix",
+			"description": "Improve input precision by preventing framerate desync.\nExperimental, may break things.",
+			"type": "bool",
+			"default": true,
 			"platforms": ["win"]
 		},
 		"pb-category": {
