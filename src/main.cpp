@@ -56,6 +56,14 @@ void buildStepQueue(int stepCount) {
 	#ifdef GEODE_IS_WINDOWS
 	if (linuxNative) linuxCheckInputs();
 	#endif
+	
+	#ifdef GEODE_IS_ANDROID
+	static double androidFactor = []() {
+		VersionInfo ver = geode::Loader::get()->getVersion();
+		if (ver.getMajor() == 5 && ver.getMinor() <= 3) return 1000.0;
+		else return 1.0;
+	}();
+	#endif
 
 	skipUpdate = false;
 	if (firstFrame) {
@@ -77,6 +85,8 @@ void buildStepQueue(int stepCount) {
 		double elapsedTime = 0.0;
 		while (inputIdx < inputVector.size()) { // while loop to account for multiple inputs on the same step
 			PlayerButtonCommand input = inputVector[inputIdx];
+			GEODE_ANDROID(input.m_timestamp /= androidFactor;)
+
 			if (input.m_timestamp - lastFrameTime < stepDelta * (i + 1)) { // if the next input in the vector happened on the current step, or if its the last step
 				double inputTime = fmod((input.m_timestamp - lastFrameTime), stepDelta) / stepDelta; // proportion of step elapsed at the time the input was made
 				stepQueue.emplace_back(Step{ input, std::clamp(inputTime - elapsedTime, SMALLEST_FLOAT, 1.0), false });
@@ -595,7 +605,7 @@ void togglePrecisionFix(bool enable) {
 			0x0F, 0x57, 0xC0,                         // xorps xmm0, xmm0
 			0x0F, 0x57, 0xC9,                         // xorps xmm1, xmm1
 			0xF2, 0x48, 0x0F, 0x2A, 0x44, 0x24, 0x68, // cvtsi2sd xmm0, [rsp+0x68]
-			0x49, 0xB9, 0,0,0,0,0,0,0,0,              // mov r9, retAddr
+			0x49, 0xB9, 0,0,0,0,0,0,0,0,              // movabs r9, retAddr
 			0x41, 0xFF, 0xE1                          // jmp r9
 		};
 

@@ -100,7 +100,7 @@
 			"description": "Use right click for player 2 jump.",
 			"type": "bool",
 			"default": false,
-			"enable-if": "saved:you-must-be-on-linux-to-change-this",
+			"enable-if": "saved:you-must-be-on-linux-to-change-this && wine-workaround",
 			"platforms": ["win"]
 		}
 	},
