@@ -261,6 +261,8 @@ void onFrameStart() {
 	PlayLayer* playLayer = PlayLayer::get();
 	CCNode* par;
 
+	if (!precisionFix || linuxNative) currentFrameTime = getCurrentTimestamp();
+
 	if (softToggle // CBF disabled
 	#ifdef GEODE_IS_WINDOWS
 		|| !GetFocus() // GD is minimized
@@ -306,13 +308,11 @@ class $modify(CCScheduler) {
 		#ifndef GEODE_IS_WINDOWS
 		onFrameStart();
 		#else
-		if (precisionFix) {
+		if (precisionFix && !linuxNative) {
 			static LARGE_INTEGER* cur = reinterpret_cast<LARGE_INTEGER*>(geode::base::getCocos() + 0x1a84d8);
 			currentFrameTime = (double)cur->QuadPart / (double)freq.QuadPart;
 		}
 		#endif
-
-		if (!precisionFix) currentFrameTime = getCurrentTimestamp();
 		
 		CCScheduler::update(dt);
 	}
