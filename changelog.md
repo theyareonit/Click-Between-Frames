@@ -1,3 +1,31 @@
+# v1.5.0
+
+* Port to GD 2.2081
+* Switch to using Robtop's input handling to simplify the mod & improve compatibility
+* Remove "Right Click P2" option (not feasible to implement atm)
+* Remove "Late Input Cutoff" option (not feasible to implement atm, also it just wasn't good to enable to begin with)
+* Remove "Thread Priority" option (irrelevant now)
+* Improve input precision when Physics Bypass is enabled
+* Add "Precision Fix" option on Windows to fix framerate desync issues that somewhat affect input precision (should not affect physics)
+* Remove winelib dependency on Linux
+* Build Linux input program with an old version of glibc to (hopefully) improve compatibility
+
+Hello, I don't have a Discord server to make announcements in so I thought I'd write something here about this update. First, I'm sorry if it crashes your game or doesn't work properly. I release updates when none of the people I ask to test the mod experience any issues. I don't have a huge sample size of testers, so I can't catch every issue (it's especially hard to get testers for Mac/iOS).
+
+Second, I know that this update took a while to release. Well, part of that was the fact that I changed a lot of stuff which took some time. But the main reason is just that I almost never play GD, so I don't have any need to update the mod for my own sake, and at this point, I have very little personal attachment to the game. I also don't make very much money off of the mod, in fact up until very recently I had only received a single donation since 2024. I'm not going to say the total amount I've received but it's less than Doggie gets from an average Grief stream. That said, I'm sure several other modders are in a similar situation, so I'm not going to beg for money *too* much (only a little).
+
+Also, the aspect of programming that involves reading documentation, having to look up how to do stuff, having to work with obscure libraries or language features, etc. is extremely boring to me. I enjoy the puzzle solving aspect of coming up with algorithms or trying to improve the performance of software, but anything that involves working with code that someone else already wrote is very painful. So, the idea of having to update the mod to work with a new version of Geode and a new version of GD (with its own input handling that I had to figure out and work around) very much put me off.
+
+**On the subject of RobTop's CBS:** \
+I have no issue with RobTop using the mod concept, using a similar name, etc. In fact, even if he wanted to use the mod's code directly, I wouldn't have an issue with it. However, I do wish he would have reached out before making the update so that I could help him with things like improving input precision or avoiding some of the bugs that were present in the original release of CBS (like some issues with buffering inputs, and not checking for inputs on a separate thread). In fact I had tried to get in contact with Rob several times before 2.208 released (through various different people with connections) but I never got a response back.
+
+Overall I feel like it's somewhat pointless to make CBS and then only have 480TPS input precision, because that isn't enough to make it on par with CBF for top play so top players will just use CBF anyway (though I do appreciate CBF verifications being rateable now! Particularly Ashley Wave Trials (which I had WR on for a while after it released (btw) (and also I built the nerfdate))). The COS option seems fine though.
+
+**Some history for those who might be interested:** \
+Technically the idea for this mod goes back to early 2022, before I had even learned to code, but I didn't try to implement it for real until 2023. However, I had to stop working on it at the time because of some life circumstances. Then, in 2024, after I had gotten better at coding, I started over and created CBF as a project for university. I didn't expect to have to maintain it for a very long time since it was originally more of just a proof of concept than anything, but it got a lot more complex and also a lot more popular than I had expected. I had previously made the "-1 frame" mod back in 2.1 (to remove the game's 1 unnecessary frame of input lag) and while it had seen a lot of usage from top players, it obviously was nowhere near the level of popularity that CBF has reached.
+
+I want to say, for the record, that I tried to be as neutral as possible on issues like whether CBF should be allowed on the Demon List, whether it should be allowed on ingame leaderboards, etc. and I tried to comply with requests from members of these communities wherever possible (for instance, adding the watermark in the top right of the endscreen, and making it so that CBF doesn't submit to leaderboards on rated levels). I never gave a single opinion even in private servers about whether I thought CBF should be allowed on the Demon List until after it had actually been allowed. So, don't blame me if you were upset with that decision.
+
 # v1.4.6
 
 * Fix Click on Steps processing inputs before spawn triggers were updated

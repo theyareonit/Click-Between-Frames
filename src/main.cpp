@@ -57,6 +57,7 @@ void buildStepQueue(int stepCount) {
 	if (linuxNative) linuxCheckInputs();
 	#endif
 	
+	// workaround for a bug in geode 5.3.0 that affects android
 	#ifdef GEODE_IS_ANDROID
 	static double androidFactor = []() {
 		VersionInfo ver = geode::Loader::get()->getVersion();
@@ -561,7 +562,6 @@ void writeAddr(geode::ByteVector& vec, size_t offset, const void* addr) {
 	memcpy(vec.data() + offset, &addr, sizeof(addr));
 }
 
-// ok some of the surrounding stuff was vibe coded but i did write all the asm myself
 void togglePrecisionFix(bool enable) {
 #ifdef GEODE_IS_WINDOWS
 	static Patch* pfPatch = nullptr;
