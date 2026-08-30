@@ -9,15 +9,39 @@
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
 #include <sys/inotify.h>
+#include <sys/utsname.h>
+#include <sys/stat.h>
 
 #include <iostream>
+#include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <cstdarg>
 #include <string>
 #include <vector>
 #include <atomic>
 #include <array>
 #include <algorithm>
+
+static void log_msg(const char* fmt, ...) {
+    static FILE* log_file = []() -> FILE* {
+        std::string base = std::getenv("HOME") ? std::getenv("HOME") : "/tmp";
+        std::string path = base + "/cbf-linux-input.log";
+        return fopen(path.c_str(), "a");
+    }();
+    if (!log_file) return;
+    va_list args;
+    time_t now = time(nullptr);
+    struct tm* tm_now = localtime(&now);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%H:%M:%S", tm_now);
+    fprintf(log_file, "[%s] ", ts);
+    va_start(args, fmt);
+    vfprintf(log_file, fmt, args);
+    va_end(args);
+    fprintf(log_file, "\n");
+    fflush(log_file);
+}
 
 enum DeviceType : int8_t {
     MOUSE,
@@ -95,13 +119,16 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
         // causing it to try to add the now deleted device. And we ignore errno 13 because it means that the IN_ATTRIB
         // signal that we catched is not the right one and we can't access the device yet. More information below.
         if(errno == 2 || errno == 13) return;
+        log_msg("[CBF] ERROR: Failed to open %s: %s", path.c_str(), strerror(errno));
         std::cerr << "[CBF] Failed to open " << path << ": " << strerror(errno) << std::endl;
         return;
     }
+    log_msg("[CBF] Opened %s (fd=%d)", path.c_str(), fd);
 
     libevdev* dev = nullptr;
     int rc = libevdev_new_from_fd(fd, &dev);
     if (rc < 0) {
+        log_msg("[CBF] ERROR: Failed to create evdev device for %s: %s", path.c_str(), strerror(-rc));
         std::cerr << "[CBF] Failed to create evdev device for " << path << ": " << strerror(-rc) << std::endl;
         close(fd);
         return;
@@ -109,6 +136,7 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
 
     int bus = libevdev_get_id_bustype(dev);
     if (bus == BUS_USB || bus == BUS_BLUETOOTH || bus == BUS_I8042 || bus == BUS_VIRTUAL) {
+        log_msg("[CBF] Device %s bus=%d name=\"%s\"", path.c_str(), bus, libevdev_get_name(dev));
         epoll_event ev;
         ev.events = EPOLLIN;
         ev.data.ptr = dev;
@@ -121,8 +149,10 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
 
         devices.push_back(dev);
         devices_paths.push_back(path);
+        log_msg("[CBF] Added device: %s", path.c_str());
         std::cerr << "[CBF] Added device: " << path << std::endl;
     } else {
+        log_msg("[CBF] Skipping device %s (bus=%d)", path.c_str(), bus);
         libevdev_free(dev);
         close(fd);
     }
@@ -153,28 +183,40 @@ int32_t normalize_axis(struct libevdev* dev, int code, int val, int min, int max
 }
 
 int main(int argc, char* argv[]) {
+    log_msg("[CBF] linux-input started, argc=%d", argc);
     if (argc < 2) {
+        log_msg("[CBF] ERROR: Usage: linux-input <shm_path>");
         std::cerr << "[CBF] Usage: linux-input <shm_path>" << std::endl;
         return 1;
     }
 
     std::string shm_path = argv[1];
+    log_msg("[CBF] Linux input program started, shm: %s", shm_path.c_str());
     std::cerr << "[CBF] Linux input program started, shm: " << shm_path << std::endl;
 
     int shm_fd = open(shm_path.c_str(), O_RDWR);
     if (shm_fd == -1) {
+        log_msg("[CBF] ERROR: Failed to open shared memory %s: %s", shm_path.c_str(), strerror(errno));
         std::cerr << "[CBF] Failed to open shared memory: " << strerror(errno) << std::endl;
         return 1;
     }
+    log_msg("[CBF] Shared memory opened OK");
 
     SharedMemory* shm = static_cast<SharedMemory*>(
         mmap(NULL, sizeof(SharedMemory), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0));
     close(shm_fd);
 
     if (shm == MAP_FAILED) {
+        log_msg("[CBF] ERROR: Failed to mmap shared memory: %s", strerror(errno));
         std::cerr << "[CBF] Failed to mmap shared memory: " << strerror(errno) << std::endl;
         return 1;
     }
+    log_msg("[CBF] Shared memory mapped OK");
+
+    // log basic system info to help diagnose container/device issues
+    struct utsname uts;
+    if (uname(&uts) == 0) log_msg("[CBF] System: %s %s %s", uts.sysname, uts.release, uts.machine);
+    log_msg("[CBF] uid=%d gid=%d", getuid(), getgid());
 
     std::vector<struct libevdev*> devices;
     // To my knowledge, there is not a proper way to access a device's path using libevdev, so we need to store
@@ -206,6 +248,15 @@ int main(int argc, char* argv[]) {
     char inotify_buffer[INOTIFY_BUF_LEN];
 
     DIR* dir = opendir(input_dir);
+    if (!dir) {
+        log_msg("[CBF] ERROR: opendir(%s) failed: %s", input_dir, strerror(errno));
+        shm->error_flag = 3;
+        close(epoll_fd);
+        inotify_rm_watch(inotify_fd, inotify_watch);
+        close(inotify_fd);
+        munmap(shm, sizeof(SharedMemory));
+        return 1;
+    }
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         std::string filename(entry->d_name);
@@ -215,11 +266,13 @@ int main(int argc, char* argv[]) {
         }
     }
     closedir(dir);
+    log_msg("[CBF] Device scan complete, %zu devices added", devices.size());
 
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
 
     if (devices.empty()) {
+        log_msg("[CBF] ERROR: No input devices found, setting error_flag=3");
         std::cerr << "[CBF] No input devices" << std::endl;
         shm->error_flag = 3;
         close(epoll_fd);
@@ -230,6 +283,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cerr << "[CBF] Waiting for input events" << std::endl;
+    log_msg("[CBF] Waiting for input events");
 
     uint32_t last_heartbeat = shm->heartbeat;
     bool heartbeat_started = false;
@@ -253,6 +307,7 @@ int main(int argc, char* argv[]) {
             clock_gettime(CLOCK_MONOTONIC, &now);
             long elapsed_secs = now.tv_sec - last_heartbeat_time.tv_sec;
             if (elapsed_secs >= WATCHDOG_TIMEOUT_SECS) {
+                log_msg("[CBF] GD heartbeat timeout, exiting");
                 std::cerr << "[CBF] GD heartbeat timeout, exiting" << std::endl;
                 break;
             }
@@ -371,5 +426,6 @@ int main(int argc, char* argv[]) {
     unlink(shm_path.c_str());
 
     std::cerr << "[CBF] Linux input program exiting" << std::endl;
+    log_msg("[CBF] linux-input exiting cleanly");
     return 0;
 }
