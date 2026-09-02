@@ -419,19 +419,19 @@ class $modify(PlayerObject) {
 		bool p1NotBuffering = p1StartedOnGround
 			|| this->m_touchingRings->count()
 			|| this->m_isDashing
-			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing);
+			|| (this->m_isDart || this->m_isBird || this->m_isShip || this->m_isSwing || this->m_isRobot); // robot jump height depends on hold duration, so releases midair need precision too
 
 		bool p2NotBuffering = p2StartedOnGround
 			|| p2->m_touchingRings->count()
 			|| p2->m_isDashing
-			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing);
+			|| (p2->m_isDart || p2->m_isBird || p2->m_isShip || p2->m_isSwing || p2->m_isRobot);
 
 		p1Pos = PlayerObject::getPosition(); // save for later to prevent desync with move triggers & some other issues
 		p2Pos = p2->getPosition();
 
 		p1Split = p1NotBuffering;
 		p2Split = p2NotBuffering && isDual;
-		
+
 		Step step;
 		bool firstLoop = true;
 		midStep = true;
