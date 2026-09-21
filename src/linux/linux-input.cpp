@@ -92,7 +92,6 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
     if (std::find(devices_paths.begin(), devices_paths.end(), path) != devices_paths.end()) {
         return;
     }
-
     int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
         // We ignore errno if its 2 because when a device is disconnected, an IN_ATTRIB signal will still be sent,
@@ -133,23 +132,19 @@ void add_input_device(std::string path, int epoll_fd, std::vector<struct libevde
 }
 
 void remove_input_device(std::string path, std::vector<struct libevdev*> &devices, std::vector<std::string> &devices_paths){
-    bool found = false;
-    for (size_t i = 0; i < devices_paths.size(); ) {
-        if (devices_paths[i] == path) {
-            close(libevdev_get_fd(devices[i]));
-            libevdev_free(devices[i]);
-            devices.erase(devices.begin() + i);
-            devices_paths.erase(devices_paths.begin() + i);
-            found = true;
-        } else {
-            ++i;
-        }
-    }
-    if (!found) {
+    auto finder = std::find(devices_paths.begin(), devices_paths.end(), path);
+    int index = std::distance(devices_paths.begin(), finder);
+    if(finder == devices_paths.end()){
         std::cerr << "[CBF] Input device scheduled to be removed was not found." << std::endl;
-    } else {
-        std::cerr << "[CBF] Removed device: " << path << std::endl;
+        return;
     }
+
+    close(libevdev_get_fd(devices[index]));
+    libevdev_free(devices[index]);
+    devices.erase(devices.begin() + index);
+    devices_paths.erase(devices_paths.begin() + index);
+
+    std::cerr << "[CBF] Removed device: " << path << std::endl;
 }
 
 int32_t normalize_axis(struct libevdev* dev, int code, int val, int min, int max) {
