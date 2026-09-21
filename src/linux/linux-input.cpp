@@ -89,6 +89,9 @@ uint16_t convert_scan_code(uint16_t code) {
 }
 
 void add_input_device(std::string path, int epoll_fd, std::vector<struct libevdev*> &devices, std::vector<std::string> &devices_paths){
+    if (std::find(devices_paths.begin(), devices_paths.end(), path) != devices_paths.end()) {
+        return;
+    }
     int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
         // We ignore errno if its 2 because when a device is disconnected, an IN_ATTRIB signal will still be sent,
