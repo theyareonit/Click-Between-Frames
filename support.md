@@ -1,1 +1,3 @@
-Please support me through [PayPal](https://www.paypal.com/donate/?hosted_button_id=U2LWN9H395TF8) if you enjoy the mod!
+Development: @l0un4, mxidevofc.
+
+For help or bug reports, open an issue on the [source repository](https://github.com/mxiofc/Click-Before-Frames).

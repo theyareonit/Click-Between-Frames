@@ -1,3 +1,9 @@
+# v1.5.1
+
+* Rebrand the mod to "Click Before Frames" (name, mod ID, description, docs and source link)
+* Development: @l0un4, mxidevofc
+* New logo: the click marker now sits before the frames instead of in the middle, with the cursor coming in from behind
+
 # v1.5.0
 
 * Port to GD 2.2081
