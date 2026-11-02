@@ -6,11 +6,11 @@
 		"mac": "2.2081",
 		"ios": "2.2081"
 	},
-	"version": "v1.5.0",
-	"id": "syzzi.click_between_frames",
-	"name": "Click Between Frames",
-	"developer": "syzzi",
-	"description": "Allows inputs to register between frames.",
+	"version": "v1.5.1",
+	"id": "mxidevofc.click_before_frames",
+	"name": "Click Before Frames",
+	"developer": "Development: @l0un4, mxidevofc",
+	"description": "Allows inputs to register before the next frame.",
 	"incompatibilities": {
 		"zmx.cbf-lite": ">=1.0.0"
 	},
@@ -88,7 +88,7 @@
 		},
 		"wine-workaround": {
 			"name": "Wine Workaround",
-			"description": "Wine doesn't let you get keyboard input between frames, so this is a workaround. However, it may not work properly on some PCs.\n\nOnly disable if experiencing issues (and don't play with keyboard if you disable it).",
+			"description": "Wine doesn't let you read keyboard input before the next frame, so this is a workaround. However, it may not work properly on some PCs.\n\nOnly disable if experiencing issues (and don't play with keyboard if you disable it).",
 			"type": "bool",
 			"default": true,
 			"requires-restart": true,
@@ -105,7 +105,7 @@
 		}
 	},
 	"links": {
-		"source": "https://github.com/theyareonit/Click-Between-Frames"
+		"source": "https://github.com/mxiofc/Click-Before-Frames"
 	},
 	"resources": {
 		"files": [
