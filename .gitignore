@@ -56,3 +56,9 @@ build-*/
 
 # Visual Studio
 .vs/
+
+# Generated release packages (build with tools/package_geode.py)
+*.geode
+*.geode.sha256
+dist/
+bin/

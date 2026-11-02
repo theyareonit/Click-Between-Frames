@@ -38,3 +38,8 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 Development: @l0un4, mxidevofc.
 
 Based on an MIT-licensed upstream project; see [LICENSE](LICENSE) for the original copyright notice.
+
+# Release
+
+A `.geode` release package is generated with `python3 tools/package_geode.py`.
+See [PACKAGING.md](PACKAGING.md) for the package layout and how to add the compiled platform binaries.
