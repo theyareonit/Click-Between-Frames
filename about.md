@@ -1,8 +1,8 @@
+# Click Before Frames
+
 # What does it do
 
-This mod allows your inputs to register in between visual frames, which drastically increases input precision on low framerates like 60FPS.
-
-If you like the mod, please consider [donating](https://www.paypal.com/donate/?hosted_button_id=U2LWN9H395TF8)!
+This mod allows your inputs to register before the next visual frame, which drastically increases input precision on low framerates like 60FPS.
 
 # Why not just use Click Between Steps?
 
@@ -29,11 +29,6 @@ If on Linux, and the mod doesn't work, please try running the command <cr>sudo u
 - This mod does not work with bots
 - Linux controller support is experimental
 
-# Credits
+# Development
 
-Icon by alex/sincos.
-
-Android, macOS, & iOS code based off [Click on Steps by zmx](https://github.com/qimiko/click-on-steps), used with permission. \
-Android port by [mat](https://github.com/matcool), macOS & iOS ports by [Jasmine](https://github.com/hiimjasmine00).
-
-(these credits are slightly outdated since the mod just uses the vanilla game's input handling now but oh well)
+Development: @l0un4, mxidevofc.
