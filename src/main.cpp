@@ -226,11 +226,11 @@ int calculateStepCount(double delta, float timewarp, bool forceVanilla) {
 bool safeMode;
 
 class $modify(PlayLayer) {
-	bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+	bool init(GJGameLevel* level, bool dontCreateObjects) {
 		#ifdef GEODE_IS_WINDOWS
 		if (linuxNative) updateKeybinds(); // update keybinds when you enter a level (for linux)
 		#endif
-		bool result = PlayLayer::init(level, useReplay, dontCreateObjects);
+		bool result = PlayLayer::init(level, dontCreateObjects);
 		if (!softToggle) {
 			this->m_clickBetweenSteps = false;
 			this->m_clickOnSteps = false;

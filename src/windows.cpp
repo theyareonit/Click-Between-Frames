@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <atomic>
+#include <xinput.h>
 
 LARGE_INTEGER freq;
 
