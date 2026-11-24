@@ -12,7 +12,7 @@ Because CBS is limited to 480TPS precision, while this mod does not have a hard 
 
 If the icon is automatically jumping when you respawn, disable the "Stop Triggers on Death" hack in Mega Hack.
 
-To edit keybinds, go to the GD options menu and click the "Keys" button in the top right (requires Custom Keybinds).
+To edit keybinds, go to the GD options menu and click the "Keys" button in the top right.
 
 It is recommended to use either Physics Bypass or one of these FPS values: 60, 80, 120, or 240. \
 This is because 2.2 has stutters on FPS values that aren't factors or multiples of 240 unless you enable Physics Bypass.
