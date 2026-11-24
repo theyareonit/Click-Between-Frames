@@ -73,7 +73,7 @@ jobs:
         with:
           combine: true
           target: ${{ matrix.config.target }}
-          # sdk: nightly
+          sdk: given
 
   package:
     name: Package builds
